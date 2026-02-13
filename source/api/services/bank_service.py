@@ -1,0 +1,147 @@
+"""Bank information service - queries PostgreSQL."""
+
+import json
+import logging
+
+import asyncpg
+import redis.asyncio as aioredis
+
+logger = logging.getLogger(__name__)
+
+CACHE_TTL = 86400  # 24 hours
+
+
+async def get_banks(pool: asyncpg.Pool, redis: aioredis.Redis) -> list[dict]:
+    cache_key = "banks:list"
+    cached = await redis.get(cache_key)
+    if cached:
+        return json.loads(cached)
+
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            "SELECT * FROM bank_info ORDER BY bank_name"
+        )
+
+    data = [dict(r) for r in rows]
+    # Convert datetime objects to strings for JSON serialization
+    for d in data:
+        for k, v in d.items():
+            if hasattr(v, "isoformat"):
+                d[k] = v.isoformat()
+
+    await redis.setex(cache_key, CACHE_TTL, json.dumps(data))
+    return data
+
+
+async def get_branches(
+    pool: asyncpg.Pool,
+    redis: aioredis.Redis,
+    bank_name: str,
+    city: str | None = None,
+) -> list[dict]:
+    cache_key = f"banks:branches:{bank_name}:{city}"
+    cached = await redis.get(cache_key)
+    if cached:
+        return json.loads(cached)
+
+    async with pool.acquire() as conn:
+        if city:
+            rows = await conn.fetch(
+                "SELECT * FROM branch_info WHERE bank_name = $1 AND city = $2 ORDER BY branch_name",
+                bank_name, city,
+            )
+        else:
+            rows = await conn.fetch(
+                "SELECT * FROM branch_info WHERE bank_name = $1 ORDER BY branch_name",
+                bank_name,
+            )
+
+    data = [dict(r) for r in rows]
+    for d in data:
+        for k, v in d.items():
+            if hasattr(v, "isoformat"):
+                d[k] = v.isoformat()
+
+    await redis.setex(cache_key, CACHE_TTL, json.dumps(data))
+    return data
+
+
+async def get_atms(
+    pool: asyncpg.Pool,
+    redis: aioredis.Redis,
+    bank_name: str,
+    city: str | None = None,
+) -> list[dict]:
+    cache_key = f"banks:atms:{bank_name}:{city}"
+    cached = await redis.get(cache_key)
+    if cached:
+        return json.loads(cached)
+
+    async with pool.acquire() as conn:
+        if city:
+            rows = await conn.fetch(
+                "SELECT * FROM atm_info WHERE bank_name = $1 AND city = $2 ORDER BY branch_name",
+                bank_name, city,
+            )
+        else:
+            rows = await conn.fetch(
+                "SELECT * FROM atm_info WHERE bank_name = $1 ORDER BY branch_name",
+                bank_name,
+            )
+
+    data = [dict(r) for r in rows]
+    for d in data:
+        for k, v in d.items():
+            if hasattr(v, "isoformat"):
+                d[k] = v.isoformat()
+
+    await redis.setex(cache_key, CACHE_TTL, json.dumps(data))
+    return data
+
+
+async def get_history(
+    pool: asyncpg.Pool,
+    redis: aioredis.Redis,
+    bank_name: str,
+) -> dict | None:
+    cache_key = f"banks:history:{bank_name}"
+    cached = await redis.get(cache_key)
+    if cached:
+        return json.loads(cached)
+
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            "SELECT * FROM historical_events WHERE bank_name = $1",
+            bank_name,
+        )
+
+    if not row:
+        return None
+
+    data = dict(row)
+    for k, v in data.items():
+        if hasattr(v, "isoformat"):
+            data[k] = v.isoformat()
+
+    await redis.setex(cache_key, CACHE_TTL, json.dumps(data))
+    return data
+
+
+async def search_banks(
+    pool: asyncpg.Pool,
+    redis: aioredis.Redis,
+    query: str,
+) -> list[dict]:
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            "SELECT * FROM bank_info WHERE bank_name ILIKE $1 ORDER BY bank_name LIMIT 50",
+            f"%{query}%",
+        )
+
+    data = [dict(r) for r in rows]
+    for d in data:
+        for k, v in d.items():
+            if hasattr(v, "isoformat"):
+                d[k] = v.isoformat()
+
+    return data
