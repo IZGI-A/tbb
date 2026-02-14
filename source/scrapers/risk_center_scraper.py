@@ -1,7 +1,7 @@
 import logging
 from typing import Any
 
-from source.scrapers.base import TBBApiClient
+from scrapers.base import TBBApiClient
 
 logger = logging.getLogger(__name__)
 

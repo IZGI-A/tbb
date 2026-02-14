@@ -3,10 +3,10 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from source.config import settings
-from source.db.postgres import get_pg_pool, close_pg_pool
-from source.db.redis import get_redis, close_redis
-from source.api.routers import financial, regions, risk_center, banks
+from config import settings
+from db.postgres import get_pg_pool, close_pg_pool
+from db.redis import get_redis, close_redis
+from api.routers import financial, regions, risk_center, banks
 
 
 @asynccontextmanager

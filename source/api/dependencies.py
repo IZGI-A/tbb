@@ -4,9 +4,9 @@ import asyncpg
 import redis.asyncio as aioredis
 from clickhouse_driver import Client as CHClient
 
-from source.config import settings
-from source.db.postgres import get_pg_pool
-from source.db.redis import get_redis
+from config import settings
+from db.postgres import get_pg_pool
+from db.redis import get_redis
 
 
 async def get_pg() -> asyncpg.Pool:

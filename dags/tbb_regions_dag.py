@@ -29,7 +29,7 @@ def _ensure_staging_dir():
 
 
 def fetch_metadata(**context):
-    from source.scrapers.region_scraper import RegionScraper
+    from scrapers.region_scraper import RegionScraper
 
     _ensure_staging_dir()
     scraper = RegionScraper()
@@ -41,7 +41,7 @@ def fetch_metadata(**context):
 
 
 def fetch_data(**context):
-    from source.scrapers.region_scraper import RegionScraper
+    from scrapers.region_scraper import RegionScraper
 
     _ensure_staging_dir()
     year_ids = context["ti"].xcom_pull(task_ids="fetch_metadata", key="year_ids")
@@ -58,7 +58,7 @@ def fetch_data(**context):
 
 
 def transform(**context):
-    from source.etl.transformers import transform_regions
+    from etl.transformers import transform_regions
 
     staging_path = context["ti"].xcom_pull(task_ids="fetch_data", key="staging_path")
     with open(staging_path) as f:
@@ -75,7 +75,7 @@ def transform(**context):
 
 
 def load_clickhouse(**context):
-    from source.etl.clickhouse_loader import load_region_statistics
+    from etl.clickhouse_loader import load_region_statistics
 
     transformed_path = context["ti"].xcom_pull(task_ids="transform", key="transformed_path")
     with open(transformed_path) as f:

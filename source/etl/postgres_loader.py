@@ -6,7 +6,7 @@ from typing import Any
 import psycopg2
 from psycopg2.extras import execute_values
 
-from source.config import settings
+from config import settings
 
 logger = logging.getLogger(__name__)
 

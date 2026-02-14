@@ -29,7 +29,7 @@ def _ensure_staging_dir():
 
 
 def fetch_metadata(**context):
-    from source.scrapers.risk_center_scraper import RiskCenterScraper
+    from scrapers.risk_center_scraper import RiskCenterScraper
 
     _ensure_staging_dir()
     scraper = RiskCenterScraper()
@@ -41,7 +41,7 @@ def fetch_metadata(**context):
 
 
 def fetch_data(**context):
-    from source.scrapers.risk_center_scraper import RiskCenterScraper
+    from scrapers.risk_center_scraper import RiskCenterScraper
 
     _ensure_staging_dir()
     period_ids = context["ti"].xcom_pull(task_ids="fetch_metadata", key="period_ids")
@@ -58,7 +58,7 @@ def fetch_data(**context):
 
 
 def transform(**context):
-    from source.etl.transformers import transform_risk_center
+    from etl.transformers import transform_risk_center
 
     staging_path = context["ti"].xcom_pull(task_ids="fetch_data", key="staging_path")
     with open(staging_path) as f:
@@ -75,7 +75,7 @@ def transform(**context):
 
 
 def load_clickhouse(**context):
-    from source.etl.clickhouse_loader import load_risk_center
+    from etl.clickhouse_loader import load_risk_center
 
     transformed_path = context["ti"].xcom_pull(task_ids="transform", key="transformed_path")
     with open(transformed_path) as f:

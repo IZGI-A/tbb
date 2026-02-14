@@ -29,7 +29,7 @@ def _ensure_staging_dir():
 
 
 def fetch_banks(**context):
-    from source.scrapers.bank_info_scraper import BankInfoScraper
+    from scrapers.bank_info_scraper import BankInfoScraper
 
     _ensure_staging_dir()
     scraper = BankInfoScraper()
@@ -44,7 +44,7 @@ def fetch_banks(**context):
 
 
 def transform(**context):
-    from source.etl.transformers import transform_bank_info
+    from etl.transformers import transform_bank_info
 
     staging_path = context["ti"].xcom_pull(task_ids="fetch_banks", key="staging_path")
     with open(staging_path) as f:
@@ -61,7 +61,7 @@ def transform(**context):
 
 
 def load_postgres(**context):
-    from source.etl.postgres_loader import load_all_bank_data
+    from etl.postgres_loader import load_all_bank_data
 
     transformed_path = context["ti"].xcom_pull(task_ids="transform", key="transformed_path")
     with open(transformed_path) as f:

@@ -1,5 +1,5 @@
 import redis.asyncio as aioredis
-from source.config import settings
+from config import settings
 
 _redis: aioredis.Redis | None = None
 

@@ -29,7 +29,7 @@ def _ensure_staging_dir():
 
 
 def fetch_periods(**context):
-    from source.scrapers.financial_scraper import FinancialScraper
+    from scrapers.financial_scraper import FinancialScraper
 
     _ensure_staging_dir()
     scraper = FinancialScraper()
@@ -42,7 +42,7 @@ def fetch_periods(**context):
 
 
 def fetch_data(**context):
-    from source.scrapers.financial_scraper import FinancialScraper
+    from scrapers.financial_scraper import FinancialScraper
 
     _ensure_staging_dir()
     period_ids = context["ti"].xcom_pull(task_ids="fetch_periods", key="period_ids")
@@ -60,7 +60,7 @@ def fetch_data(**context):
 
 
 def transform(**context):
-    from source.etl.transformers import transform_financial
+    from etl.transformers import transform_financial
 
     staging_path = context["ti"].xcom_pull(task_ids="fetch_data", key="staging_path")
     with open(staging_path) as f:
@@ -77,7 +77,7 @@ def transform(**context):
 
 
 def load_clickhouse(**context):
-    from source.etl.clickhouse_loader import load_financial_statements
+    from etl.clickhouse_loader import load_financial_statements
 
     transformed_path = context["ti"].xcom_pull(task_ids="transform", key="transformed_path")
     with open(transformed_path) as f:

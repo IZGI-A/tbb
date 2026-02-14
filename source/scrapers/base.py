@@ -6,7 +6,7 @@ import requests
 import urllib3
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 
-from source.config import settings
+from config import settings
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 

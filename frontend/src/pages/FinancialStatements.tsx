@@ -4,7 +4,7 @@ import { DownloadOutlined } from '@ant-design/icons';
 import LineChart from '../components/charts/LineChart';
 import YearMonthFilter from '../components/filters/YearMonthFilter';
 import { useFinancialStatements, useFinancialPeriods, useFinancialTimeSeries } from '../hooks/useFinancial';
-import type { FinancialRecord, PeriodInfo } from '../types';
+import type { FinancialRecord, PeriodInfo, TimeSeriesPoint } from '../types';
 
 const FinancialStatements: React.FC = () => {
   const [year, setYear] = useState<number | undefined>();
@@ -23,8 +23,9 @@ const FinancialStatements: React.FC = () => {
     bank_name: bankName,
   });
 
-  const years = [...new Set((periods ?? []).map((p: PeriodInfo) => p.year_id))].sort(
-    (a: number, b: number) => b - a
+  const periodList = (periods ?? []) as PeriodInfo[];
+  const years: number[] = Array.from(new Set<number>(periodList.map(p => p.year_id))).sort(
+    (a, b) => b - a
   );
 
   const columns = [
@@ -126,12 +127,12 @@ const FinancialStatements: React.FC = () => {
           <LineChart
             title=""
             xData={(timeSeries ?? []).map(
-              (p: { year_id: number; month_id: number }) => `${p.year_id}/${p.month_id}`
+              (p: TimeSeriesPoint) => `${p.year_id}/${p.month_id}`
             )}
             series={[{
               name: 'Toplam',
               data: (timeSeries ?? []).map(
-                (p: { amount_total: number | null }) => p.amount_total
+                (p: TimeSeriesPoint) => p.amount_total
               ),
             }]}
             loading={tsLoading}

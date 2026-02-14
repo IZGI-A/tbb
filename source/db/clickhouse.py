@@ -1,5 +1,5 @@
 from clickhouse_driver import Client
-from source.config import settings
+from config import settings
 
 
 def get_clickhouse_client() -> Client:

@@ -3,7 +3,7 @@
 import logging
 from typing import Any
 
-from source.db.clickhouse import get_clickhouse_client
+from db.clickhouse import get_clickhouse_client
 
 logger = logging.getLogger(__name__)
 

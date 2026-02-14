@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, Query
 
-from source.api.dependencies import get_ch, get_redis_client
-from source.api.services import region_service
+from api.dependencies import get_ch, get_redis_client
+from api.services import region_service
 
 router = APIRouter()
 

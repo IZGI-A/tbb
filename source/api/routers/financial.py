@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, Query
 
-from source.api.dependencies import get_ch, get_redis_client, get_pg
-from source.api.services import financial_service
+from api.dependencies import get_ch, get_redis_client, get_pg
+from api.services import financial_service
 
 router = APIRouter()
 
