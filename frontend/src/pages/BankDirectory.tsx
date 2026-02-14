@@ -9,6 +9,31 @@ const BankDetail: React.FC<{ bankName: string }> = ({ bankName }) => {
   const { data: branches, isLoading: branchLoading } = useBankBranches(bankName);
   const { data: history, isLoading: histLoading } = useBankHistory(bankName);
 
+  const [selectedCity, setSelectedCity] = useState<string | undefined>();
+  const [selectedDistrict, setSelectedDistrict] = useState<string | undefined>();
+
+  const cities = useMemo(() => {
+    if (!branches) return [];
+    return Array.from(new Set(branches.map((b: BranchInfo) => b.city).filter(Boolean))).sort() as string[];
+  }, [branches]);
+
+  const districts = useMemo(() => {
+    if (!branches) return [];
+    const filtered = selectedCity
+      ? branches.filter((b: BranchInfo) => b.city === selectedCity)
+      : branches;
+    return Array.from(new Set(filtered.map((b: BranchInfo) => b.district).filter(Boolean))).sort() as string[];
+  }, [branches, selectedCity]);
+
+  const filteredBranches = useMemo(() => {
+    if (!branches) return [];
+    return branches.filter((b: BranchInfo) => {
+      if (selectedCity && b.city !== selectedCity) return false;
+      if (selectedDistrict && b.district !== selectedDistrict) return false;
+      return true;
+    });
+  }, [branches, selectedCity, selectedDistrict]);
+
   const branchColumns = [
     { title: 'Sube Adi', dataIndex: 'branch_name', key: 'branch_name' },
     { title: 'Il', dataIndex: 'city', key: 'city' },
@@ -32,10 +57,33 @@ const BankDetail: React.FC<{ bankName: string }> = ({ bankName }) => {
         </Descriptions>
       )}
 
-      <h4>Subeler ({branches?.length ?? 0})</h4>
+      <Space wrap style={{ marginBottom: 12 }}>
+        <h4 style={{ margin: 0 }}>Subeler ({filteredBranches.length})</h4>
+        <Select
+          placeholder="Il secin"
+          allowClear
+          showSearch
+          value={selectedCity}
+          onChange={(val: string | undefined) => {
+            setSelectedCity(val);
+            setSelectedDistrict(undefined);
+          }}
+          style={{ width: 200 }}
+          options={cities.map(c => ({ value: c, label: c }))}
+        />
+        <Select
+          placeholder="Ilce secin"
+          allowClear
+          showSearch
+          value={selectedDistrict}
+          onChange={setSelectedDistrict}
+          style={{ width: 200 }}
+          options={districts.map(d => ({ value: d, label: d }))}
+        />
+      </Space>
       <Table
         columns={branchColumns}
-        dataSource={branches ?? []}
+        dataSource={filteredBranches}
         rowKey={(r: BranchInfo) => r.branch_name}
         pagination={{ pageSize: 10 }}
         size="small"
