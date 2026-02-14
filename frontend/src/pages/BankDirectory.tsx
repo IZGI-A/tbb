@@ -1,38 +1,66 @@
 import React, { useState, useMemo } from 'react';
 import { Card, Input, Select, Space, Table, Collapse, Descriptions, Tag, Spin } from 'antd';
-import { useBanks, useBankSearch, useBankBranches, useBankHistory } from '../hooks/useBanks';
-import type { BankInfo, BranchInfo } from '../types';
+import { useBanks, useBankSearch, useBankBranches, useBankAtms, useBankHistory } from '../hooks/useBanks';
+import type { BankInfo, BranchInfo, ATMInfo } from '../types';
 
 const { Search } = Input;
 
 const BankDetail: React.FC<{ bankName: string }> = ({ bankName }) => {
   const { data: branches, isLoading: branchLoading } = useBankBranches(bankName);
+  const { data: atms, isLoading: atmLoading } = useBankAtms(bankName);
   const { data: history, isLoading: histLoading } = useBankHistory(bankName);
 
-  const [selectedCity, setSelectedCity] = useState<string | undefined>();
-  const [selectedDistrict, setSelectedDistrict] = useState<string | undefined>();
+  // Branch filters
+  const [branchCity, setBranchCity] = useState<string | undefined>();
+  const [branchDistrict, setBranchDistrict] = useState<string | undefined>();
 
-  const cities = useMemo(() => {
+  // ATM filters
+  const [atmCity, setAtmCity] = useState<string | undefined>();
+  const [atmDistrict, setAtmDistrict] = useState<string | undefined>();
+
+  const branchCities = useMemo(() => {
     if (!branches) return [];
     return Array.from(new Set(branches.map((b: BranchInfo) => b.city).filter(Boolean))).sort() as string[];
   }, [branches]);
 
-  const districts = useMemo(() => {
+  const branchDistricts = useMemo(() => {
     if (!branches) return [];
-    const filtered = selectedCity
-      ? branches.filter((b: BranchInfo) => b.city === selectedCity)
+    const filtered = branchCity
+      ? branches.filter((b: BranchInfo) => b.city === branchCity)
       : branches;
     return Array.from(new Set(filtered.map((b: BranchInfo) => b.district).filter(Boolean))).sort() as string[];
-  }, [branches, selectedCity]);
+  }, [branches, branchCity]);
 
   const filteredBranches = useMemo(() => {
     if (!branches) return [];
     return branches.filter((b: BranchInfo) => {
-      if (selectedCity && b.city !== selectedCity) return false;
-      if (selectedDistrict && b.district !== selectedDistrict) return false;
+      if (branchCity && b.city !== branchCity) return false;
+      if (branchDistrict && b.district !== branchDistrict) return false;
       return true;
     });
-  }, [branches, selectedCity, selectedDistrict]);
+  }, [branches, branchCity, branchDistrict]);
+
+  const atmCities = useMemo(() => {
+    if (!atms) return [];
+    return Array.from(new Set(atms.map((a: ATMInfo) => a.city).filter(Boolean))).sort() as string[];
+  }, [atms]);
+
+  const atmDistricts = useMemo(() => {
+    if (!atms) return [];
+    const filtered = atmCity
+      ? atms.filter((a: ATMInfo) => a.city === atmCity)
+      : atms;
+    return Array.from(new Set(filtered.map((a: ATMInfo) => a.district).filter(Boolean))).sort() as string[];
+  }, [atms, atmCity]);
+
+  const filteredAtms = useMemo(() => {
+    if (!atms) return [];
+    return atms.filter((a: ATMInfo) => {
+      if (atmCity && a.city !== atmCity) return false;
+      if (atmDistrict && a.district !== atmDistrict) return false;
+      return true;
+    });
+  }, [atms, atmCity, atmDistrict]);
 
   const branchColumns = [
     { title: 'Sube Adi', dataIndex: 'branch_name', key: 'branch_name' },
@@ -42,7 +70,14 @@ const BankDetail: React.FC<{ bankName: string }> = ({ bankName }) => {
     { title: 'Telefon', dataIndex: 'phone', key: 'phone' },
   ];
 
-  if (branchLoading || histLoading) return <Spin />;
+  const atmColumns = [
+    { title: 'ATM Adi', dataIndex: 'branch_name', key: 'branch_name' },
+    { title: 'Il', dataIndex: 'city', key: 'city' },
+    { title: 'Ilce', dataIndex: 'district', key: 'district' },
+    { title: 'Adres', dataIndex: 'address', key: 'address', ellipsis: true },
+  ];
+
+  if (branchLoading || atmLoading || histLoading) return <Spin />;
 
   return (
     <div>
@@ -57,34 +92,68 @@ const BankDetail: React.FC<{ bankName: string }> = ({ bankName }) => {
         </Descriptions>
       )}
 
-      <Space wrap style={{ marginBottom: 12 }}>
+      <Space wrap style={{ marginBottom: 8 }}>
         <h4 style={{ margin: 0 }}>Subeler ({filteredBranches.length})</h4>
         <Select
           placeholder="Il secin"
           allowClear
           showSearch
-          value={selectedCity}
+          value={branchCity}
           onChange={(val: string | undefined) => {
-            setSelectedCity(val);
-            setSelectedDistrict(undefined);
+            setBranchCity(val);
+            setBranchDistrict(undefined);
           }}
           style={{ width: 200 }}
-          options={cities.map(c => ({ value: c, label: c }))}
+          options={branchCities.map(c => ({ value: c, label: c }))}
         />
         <Select
           placeholder="Ilce secin"
           allowClear
           showSearch
-          value={selectedDistrict}
-          onChange={setSelectedDistrict}
+          value={branchDistrict}
+          onChange={setBranchDistrict}
           style={{ width: 200 }}
-          options={districts.map(d => ({ value: d, label: d }))}
+          options={branchDistricts.map(d => ({ value: d, label: d }))}
         />
       </Space>
       <Table
         columns={branchColumns}
         dataSource={filteredBranches}
         rowKey={(r: BranchInfo) => r.branch_name}
+        pagination={{ pageSize: 10 }}
+        size="small"
+        scroll={{ x: 800 }}
+        style={{ marginBottom: 24 }}
+      />
+
+      <Space wrap style={{ marginBottom: 8 }}>
+        <h4 style={{ margin: 0 }}>ATM ({filteredAtms.length})</h4>
+        <Select
+          placeholder="Il secin"
+          allowClear
+          showSearch
+          value={atmCity}
+          onChange={(val: string | undefined) => {
+            setAtmCity(val);
+            setAtmDistrict(undefined);
+          }}
+          style={{ width: 200 }}
+          options={atmCities.map(c => ({ value: c, label: c }))}
+        />
+        <Select
+          placeholder="Ilce secin"
+          allowClear
+          showSearch
+          value={atmDistrict}
+          onChange={setAtmDistrict}
+          style={{ width: 200 }}
+          options={atmDistricts.map(d => ({ value: d, label: d }))}
+        />
+      </Space>
+      <Table
+        columns={atmColumns}
+        dataSource={filteredAtms}
+        rowKey={(r: ATMInfo) => `${r.branch_name}-${r.address}`}
         pagination={{ pageSize: 10 }}
         size="small"
         scroll={{ x: 800 }}
