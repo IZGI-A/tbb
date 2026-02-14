@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Card, Input, Table, Collapse, Descriptions, Tag, Spin } from 'antd';
+import React, { useState, useMemo } from 'react';
+import { Card, Input, Select, Space, Table, Collapse, Descriptions, Tag, Spin } from 'antd';
 import { useBanks, useBankSearch, useBankBranches, useBankHistory } from '../hooks/useBanks';
 import type { BankInfo, BranchInfo } from '../types';
 
@@ -47,12 +47,39 @@ const BankDetail: React.FC<{ bankName: string }> = ({ bankName }) => {
 
 const BankDirectory: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedGroup, setSelectedGroup] = useState<string | undefined>();
+  const [selectedSubGroup, setSelectedSubGroup] = useState<string | undefined>();
 
   const { data: allBanks, isLoading: allLoading } = useBanks();
   const { data: searchResults, isLoading: searchLoading } = useBankSearch(searchQuery);
 
-  const banks = searchQuery ? searchResults : allBanks;
+  const baseBanks = searchQuery ? searchResults : allBanks;
   const loading = searchQuery ? searchLoading : allLoading;
+
+  // Derive unique groups from loaded data
+  const groups = useMemo(() => {
+    if (!allBanks) return [];
+    return Array.from(new Set(allBanks.map((b: BankInfo) => b.bank_group).filter(Boolean))).sort() as string[];
+  }, [allBanks]);
+
+  // Derive sub-groups filtered by selected group
+  const subGroups = useMemo(() => {
+    if (!allBanks) return [];
+    const filtered = selectedGroup
+      ? allBanks.filter((b: BankInfo) => b.bank_group === selectedGroup)
+      : allBanks;
+    return Array.from(new Set(filtered.map((b: BankInfo) => b.sub_bank_group).filter(Boolean))).sort() as string[];
+  }, [allBanks, selectedGroup]);
+
+  // Apply group/sub-group filters
+  const banks = useMemo(() => {
+    if (!baseBanks) return [];
+    return baseBanks.filter((b: BankInfo) => {
+      if (selectedGroup && b.bank_group !== selectedGroup) return false;
+      if (selectedSubGroup && b.sub_bank_group !== selectedSubGroup) return false;
+      return true;
+    });
+  }, [baseBanks, selectedGroup, selectedSubGroup]);
 
   const columns = [
     { title: 'Banka Adi', dataIndex: 'bank_name', key: 'bank_name', width: 250 },
@@ -91,15 +118,36 @@ const BankDirectory: React.FC = () => {
       <h2>Banka Rehberi</h2>
 
       <Card style={{ marginBottom: 16 }}>
-        <Search
-          placeholder="Banka ara..."
-          allowClear
-          onSearch={setSearchQuery}
-          onChange={e => {
-            if (!e.target.value) setSearchQuery('');
-          }}
-          style={{ width: 400 }}
-        />
+        <Space wrap>
+          <Search
+            placeholder="Banka ara..."
+            allowClear
+            onSearch={setSearchQuery}
+            onChange={e => {
+              if (!e.target.value) setSearchQuery('');
+            }}
+            style={{ width: 300 }}
+          />
+          <Select
+            placeholder="Grup secin"
+            allowClear
+            value={selectedGroup}
+            onChange={(val: string | undefined) => {
+              setSelectedGroup(val);
+              setSelectedSubGroup(undefined);
+            }}
+            style={{ width: 280 }}
+            options={groups.map(g => ({ value: g, label: g }))}
+          />
+          <Select
+            placeholder="Alt grup secin"
+            allowClear
+            value={selectedSubGroup}
+            onChange={setSelectedSubGroup}
+            style={{ width: 350 }}
+            options={subGroups.map(sg => ({ value: sg, label: sg }))}
+          />
+        </Space>
       </Card>
 
       <Table

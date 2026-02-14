@@ -1,7 +1,7 @@
 """Airflow DAG for TBB Bank Info ETL pipeline.
 
-DISABLED: The bank information page has been removed from TBB verisistemi.
-This DAG is paused upon creation and will not run automatically.
+Scrapes bank list, branches, and ATMs from tbb.org.tr and loads
+into PostgreSQL tables (bank_info, branch_info, atm_info).
 
 Schedule: Monthly (1st of month, 06:00 UTC)
 Chain: scrape_banks → transform → load_postgres
@@ -84,12 +84,12 @@ def load_postgres(**context):
 with DAG(
     dag_id="tbb_bank_info",
     default_args=default_args,
-    description="TBB Bank Info ETL Pipeline — DISABLED (page removed)",
+    description="TBB Bank Info ETL Pipeline (tbb.org.tr)",
     schedule_interval="0 6 1 * *",  # 1st of month, 06:00
     start_date=datetime(2024, 1, 1),
     catchup=False,
-    is_paused_upon_creation=True,
-    tags=["tbb", "bank_info", "disabled"],
+    is_paused_upon_creation=False,
+    tags=["tbb", "bank_info"],
 ) as dag:
 
     t_scrape = PythonOperator(

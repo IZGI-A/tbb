@@ -78,8 +78,7 @@ def load_branch_info(rows: list[dict[str, Any]]) -> int:
             bank_name, branch_name, address, district,
             city, phone, fax, opening_date
         ) VALUES %s
-        ON CONFLICT (branch_name) DO UPDATE SET
-            bank_name = EXCLUDED.bank_name,
+        ON CONFLICT (bank_name, branch_name) DO UPDATE SET
             address = EXCLUDED.address,
             district = EXCLUDED.district,
             city = EXCLUDED.city,
@@ -129,14 +128,16 @@ def load_atm_info(rows: list[dict[str, Any]]) -> int:
             updated_at = CURRENT_TIMESTAMP
     """
 
-    values = [
-        (
+    # Deduplicate by PK (bank_name, branch_name, address) — keep last occurrence
+    seen: dict[tuple, tuple] = {}
+    for r in rows:
+        key = (r["bank_name"], r["branch_name"], r["address"])
+        seen[key] = (
             r["bank_name"], r["branch_name"], r["address"],
             r["district"], r["city"], r["phone"],
             r["fax"], r.get("opening_date"),
         )
-        for r in rows
-    ]
+    values = list(seen.values())
 
     execute_values(cur, sql, values)
     conn.commit()
