@@ -1,18 +1,22 @@
 import React, { useState } from 'react';
 import { Card, Select, Space, Table } from 'antd';
 import BarChart from '../components/charts/BarChart';
-import { useRegionList, useRegionMetrics, useRegionComparison, useRegionStats } from '../hooks/useRegions';
+import { useRegionList, useRegionMetrics, useRegionComparison, useRegionStats, useRegionPeriods } from '../hooks/useRegions';
 import type { RegionStat, RegionComparison as RegionComparisonType } from '../types';
 
 const RegionalStats: React.FC = () => {
   const [selectedMetric, setSelectedMetric] = useState<string>('');
-  const [selectedYear, setSelectedYear] = useState<number>(2024);
+  const [selectedYear, setSelectedYear] = useState<number | undefined>();
   const [selectedRegion, setSelectedRegion] = useState<string | undefined>();
 
   const { data: regions } = useRegionList();
   const { data: metrics } = useRegionMetrics();
+  const { data: periodData } = useRegionPeriods();
+  const regionYears: number[] = (periodData ?? []).map((p: { year_id: number }) => p.year_id).sort(
+    (a: number, b: number) => b - a
+  );
   const { data: comparison, isLoading: compLoading } = useRegionComparison(
-    selectedMetric, selectedYear
+    selectedMetric, selectedYear ?? 0
   );
   const { data: stats, isLoading: statsLoading } = useRegionStats({
     region: selectedRegion,
@@ -48,13 +52,11 @@ const RegionalStats: React.FC = () => {
           />
           <Select
             placeholder="Yil secin"
+            allowClear
             value={selectedYear}
             onChange={setSelectedYear}
             style={{ width: 120 }}
-            options={Array.from({ length: 10 }, (_, i) => ({
-              value: 2024 - i,
-              label: String(2024 - i),
-            }))}
+            options={regionYears.map(y => ({ value: y, label: String(y) }))}
           />
           <Select
             placeholder="Bolge secin"

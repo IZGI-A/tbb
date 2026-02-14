@@ -47,12 +47,19 @@ class RiskCenterScraper(TBBScraper):
     def _select_report(self, report_index: int) -> int:
         """Click a report in ``#raporAdiList`` and wait for categories to load.
 
+        Clears ``selected.kategoriler`` and ``selected.raporAdi`` first to
+        prevent accumulation from previous reports.
+
         Returns the number of categories available after loading.
         """
-        self.execute_js(f"""
-            var items = document.querySelectorAll('#raporAdiList .dx-item');
-            if (items.length > {report_index}) items[{report_index}].click();
-        """)
+        # Clear accumulated selections from previous report
+        self.execute_js(
+            "selected.kategoriler = []; selected.raporAdi = [];"
+        )
+
+        self.execute_js(
+            f"$('#raporAdiList').dxList('instance').selectItem({report_index});"
+        )
         time.sleep(3)
 
         # Count available categories

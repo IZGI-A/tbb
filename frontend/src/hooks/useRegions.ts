@@ -22,6 +22,13 @@ export function useRegionMetrics() {
   });
 }
 
+export function useRegionPeriods() {
+  return useQuery({
+    queryKey: ['regions', 'periods'],
+    queryFn: () => regionsApi.getPeriods().then(r => r.data),
+  });
+}
+
 export function useRegionComparison(metric: string, year: number) {
   return useQuery({
     queryKey: ['regions', 'comparison', metric, year],

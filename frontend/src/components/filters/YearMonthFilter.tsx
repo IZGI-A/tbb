@@ -18,12 +18,17 @@ const monthNames = [
 
 const YearMonthFilter: React.FC<YearMonthFilterProps> = ({
   years,
+  months,
   selectedYear,
   selectedMonth,
   onYearChange,
   onMonthChange,
   showMonth = true,
 }) => {
+  const monthOptions = months && months.length > 0
+    ? months.map(m => ({ value: m, label: monthNames[m - 1] }))
+    : Array.from({ length: 12 }, (_, i) => ({ value: i + 1, label: monthNames[i] }));
+
   return (
     <Space>
       <Select
@@ -41,10 +46,7 @@ const YearMonthFilter: React.FC<YearMonthFilterProps> = ({
           value={selectedMonth}
           onChange={onMonthChange}
           style={{ width: 140 }}
-          options={Array.from({ length: 12 }, (_, i) => ({
-            value: i + 1,
-            label: monthNames[i],
-          }))}
+          options={monthOptions}
         />
       )}
     </Space>

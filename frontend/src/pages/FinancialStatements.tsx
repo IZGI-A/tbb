@@ -33,6 +33,13 @@ const FinancialStatements: React.FC = () => {
   const years: number[] = Array.from(new Set<number>(periodList.map(p => p.year_id))).sort(
     (a, b) => b - a
   );
+  const months: number[] = year
+    ? Array.from(
+        new Set<number>(
+          periodList.filter(p => p.year_id === year).map(p => p.month_id)
+        )
+      ).sort((a, b) => b - a)
+    : [];
 
   const columns = [
     { title: 'Muhasebe Sistemi', dataIndex: 'accounting_system', key: 'accounting_system' },
@@ -90,9 +97,10 @@ const FinancialStatements: React.FC = () => {
         <Space wrap>
           <YearMonthFilter
             years={years}
+            months={months}
             selectedYear={year}
             selectedMonth={month}
-            onYearChange={setYear}
+            onYearChange={(y) => { setYear(y); setMonth(undefined); }}
             onMonthChange={setMonth}
           />
           <Select

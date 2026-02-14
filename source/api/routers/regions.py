@@ -20,6 +20,15 @@ async def stats(
         ch.disconnect()
 
 
+@router.get("/periods")
+async def periods(redis=Depends(get_redis_client)):
+    ch = get_ch()
+    try:
+        return await region_service.get_periods(ch, redis)
+    finally:
+        ch.disconnect()
+
+
 @router.get("/list")
 async def region_list(redis=Depends(get_redis_client)):
     ch = get_ch()

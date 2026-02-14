@@ -2,8 +2,8 @@ import React, { useState } from 'react';
 import { Card, Select, Space, Table } from 'antd';
 import BarChart from '../components/charts/BarChart';
 import YearMonthFilter from '../components/filters/YearMonthFilter';
-import { useRiskCenterData, useRiskCenterReports } from '../hooks/useRiskCenter';
-import type { RiskCenterRecord } from '../types';
+import { useRiskCenterData, useRiskCenterReports, useRiskCenterPeriods } from '../hooks/useRiskCenter';
+import type { RiskCenterRecord, PeriodInfo } from '../types';
 
 const RiskCenter: React.FC = () => {
   const [reportName, setReportName] = useState<string | undefined>();
@@ -11,13 +11,24 @@ const RiskCenter: React.FC = () => {
   const [month, setMonth] = useState<number | undefined>();
 
   const { data: reports } = useRiskCenterReports();
+  const { data: periods } = useRiskCenterPeriods();
   const { data: riskData, isLoading } = useRiskCenterData({
     report_name: reportName,
     year,
     month,
   });
 
-  const years = Array.from({ length: 10 }, (_, i) => 2024 - i);
+  const periodList = (periods ?? []) as PeriodInfo[];
+  const years: number[] = Array.from(new Set<number>(periodList.map(p => p.year_id))).sort(
+    (a, b) => b - a
+  );
+  const months: number[] = year
+    ? Array.from(
+        new Set<number>(
+          periodList.filter(p => p.year_id === year).map(p => p.month_id)
+        )
+      ).sort((a, b) => b - a)
+    : [];
 
   const columns = [
     { title: 'Rapor Adi', dataIndex: 'report_name', key: 'report_name' },
@@ -72,9 +83,10 @@ const RiskCenter: React.FC = () => {
           />
           <YearMonthFilter
             years={years}
+            months={months}
             selectedYear={year}
             selectedMonth={month}
-            onYearChange={setYear}
+            onYearChange={(y) => { setYear(y); setMonth(undefined); }}
             onMonthChange={setMonth}
           />
         </Space>

@@ -20,6 +20,15 @@ async def data(
         ch.disconnect()
 
 
+@router.get("/periods")
+async def periods(redis=Depends(get_redis_client)):
+    ch = get_ch()
+    try:
+        return await risk_service.get_periods(ch, redis)
+    finally:
+        ch.disconnect()
+
+
 @router.get("/reports")
 async def reports(redis=Depends(get_redis_client)):
     ch = get_ch()

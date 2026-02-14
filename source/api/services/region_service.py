@@ -89,6 +89,24 @@ async def get_metrics(ch: Client, redis: aioredis.Redis) -> list[str]:
     return data
 
 
+async def get_periods(ch: Client, redis: aioredis.Redis) -> list[dict]:
+    cache_key = "reg:periods"
+    cached = await redis.get(cache_key)
+    if cached:
+        return json.loads(cached)
+
+    query = """
+        SELECT DISTINCT year_id
+        FROM tbb.region_statistics FINAL
+        ORDER BY year_id DESC
+    """
+    rows = ch.execute(query)
+    data = [{"year_id": r[0]} for r in rows]
+
+    await redis.setex(cache_key, CACHE_TTL, json.dumps(data))
+    return data
+
+
 async def get_comparison(
     ch: Client,
     redis: aioredis.Redis,

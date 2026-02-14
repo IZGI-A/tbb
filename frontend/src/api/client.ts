@@ -34,6 +34,8 @@ export const regionsApi = {
     apiClient.get('/regions/list'),
   getMetrics: () =>
     apiClient.get('/regions/metrics'),
+  getPeriods: () =>
+    apiClient.get('/regions/periods'),
   getComparison: (params: { metric: string; year: number }) =>
     apiClient.get('/regions/comparison', { params }),
 };
@@ -44,6 +46,8 @@ export const riskCenterApi = {
     apiClient.get('/risk-center/data', { params }),
   getReports: () =>
     apiClient.get('/risk-center/reports'),
+  getPeriods: () =>
+    apiClient.get('/risk-center/periods'),
   getCategories: (reportName: string) =>
     apiClient.get('/risk-center/categories', { params: { report_name: reportName } }),
 };

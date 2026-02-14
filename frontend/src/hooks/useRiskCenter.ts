@@ -15,6 +15,13 @@ export function useRiskCenterReports() {
   });
 }
 
+export function useRiskCenterPeriods() {
+  return useQuery({
+    queryKey: ['risk-center', 'periods'],
+    queryFn: () => riskCenterApi.getPeriods().then(r => r.data),
+  });
+}
+
 export function useRiskCenterCategories(reportName: string) {
   return useQuery({
     queryKey: ['risk-center', 'categories', reportName],
