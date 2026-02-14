@@ -1,7 +1,7 @@
 """Airflow DAG for TBB Financial Statements ETL pipeline.
 
 Schedule: Weekly (Monday 06:00 UTC)
-Chain: fetch_periods → fetch_data → transform → load_clickhouse
+Chain: scrape_data → transform → load_clickhouse
 """
 
 import json
@@ -28,29 +28,14 @@ def _ensure_staging_dir():
     os.makedirs(STAGING_DIR, exist_ok=True)
 
 
-def fetch_periods(**context):
+def scrape_data(**context):
     from scrapers.financial_scraper import FinancialScraper
 
     _ensure_staging_dir()
-    scraper = FinancialScraper()
-    periods = scraper.fetch_periods()
 
-    # Store period IDs in XCom (small metadata)
-    period_ids = [p["ID"] for p in periods if "ID" in p]
-    context["ti"].xcom_push(key="period_ids", value=period_ids[-5:])  # Last 5 periods
-    logger.info("Pushed %d period IDs to XCom", len(period_ids[-5:]))
+    with FinancialScraper() as scraper:
+        raw_data = scraper.scrape_all()
 
-
-def fetch_data(**context):
-    from scrapers.financial_scraper import FinancialScraper
-
-    _ensure_staging_dir()
-    period_ids = context["ti"].xcom_pull(task_ids="fetch_periods", key="period_ids")
-
-    scraper = FinancialScraper()
-    raw_data = scraper.scrape_all(period_ids=period_ids)
-
-    # Write large data to staging
     staging_path = os.path.join(STAGING_DIR, f"raw_{context['ds_nodash']}.json")
     with open(staging_path, "w") as f:
         json.dump(raw_data, f, default=str)
@@ -62,7 +47,10 @@ def fetch_data(**context):
 def transform(**context):
     from etl.transformers import transform_financial
 
-    staging_path = context["ti"].xcom_pull(task_ids="fetch_data", key="staging_path")
+    staging_path = context["ti"].xcom_pull(task_ids="scrape_data", key="staging_path")
+    if not staging_path:
+        staging_path = os.path.join(STAGING_DIR, f"raw_{context['ds_nodash']}.json")
+        logger.info("XCom miss — falling back to %s", staging_path)
     with open(staging_path) as f:
         raw_data = json.load(f)
 
@@ -80,6 +68,9 @@ def load_clickhouse(**context):
     from etl.clickhouse_loader import load_financial_statements
 
     transformed_path = context["ti"].xcom_pull(task_ids="transform", key="transformed_path")
+    if not transformed_path:
+        transformed_path = os.path.join(STAGING_DIR, f"transformed_{context['ds_nodash']}.json")
+        logger.info("XCom miss — falling back to %s", transformed_path)
     with open(transformed_path) as f:
         rows = json.load(f)
 
@@ -90,21 +81,16 @@ def load_clickhouse(**context):
 with DAG(
     dag_id="tbb_financial_statements",
     default_args=default_args,
-    description="TBB Financial Statements ETL Pipeline",
+    description="TBB Financial Statements ETL Pipeline (Selenium Scraper)",
     schedule_interval="0 6 * * 1",  # Monday 06:00
     start_date=datetime(2024, 1, 1),
     catchup=False,
     tags=["tbb", "financial"],
 ) as dag:
 
-    t_fetch_periods = PythonOperator(
-        task_id="fetch_periods",
-        python_callable=fetch_periods,
-    )
-
-    t_fetch_data = PythonOperator(
-        task_id="fetch_data",
-        python_callable=fetch_data,
+    t_scrape = PythonOperator(
+        task_id="scrape_data",
+        python_callable=scrape_data,
     )
 
     t_transform = PythonOperator(
@@ -117,4 +103,4 @@ with DAG(
         python_callable=load_clickhouse,
     )
 
-    t_fetch_periods >> t_fetch_data >> t_transform >> t_load
+    t_scrape >> t_transform >> t_load

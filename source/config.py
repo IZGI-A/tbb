@@ -43,16 +43,15 @@ class Settings:
         "CORS_ORIGINS", "http://localhost:3000,http://localhost:5173"
     ).split(",")
 
-    # TBB API
-    TBB_API_URL: str = os.getenv(
-        "TBB_API_URL", "https://verisistemi.tbb.org.tr/api/router"
+    # TBB Scraping
+    TBB_BASE_URL: str = os.getenv(
+        "TBB_BASE_URL", "https://verisistemi.tbb.org.tr"
     )
-    TBB_API_TOKEN: str = os.getenv("TBB_API_TOKEN", "asd")
-    TBB_API_ROLE: str = os.getenv("TBB_API_ROLE", "1")
-    TBB_API_LANG: str = os.getenv("TBB_API_LANG", "tr")
     TBB_RATE_LIMIT_SECONDS: float = float(
-        os.getenv("TBB_RATE_LIMIT_SECONDS", "1")
+        os.getenv("TBB_RATE_LIMIT_SECONDS", "2")
     )
+    SELENIUM_HEADLESS: bool = os.getenv("SELENIUM_HEADLESS", "true").lower() == "true"
+    CHROME_BINARY_PATH: str = os.getenv("CHROME_BINARY_PATH", "")
 
 
 settings = Settings()

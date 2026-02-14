@@ -1,95 +1,112 @@
+"""Scrapes regional statistics from TBB verisistemi via Selenium.
+
+Navigates to the regional statistics page, selects filters via
+DevExtreme dxList checkboxes, triggers report generation, and
+extracts the resulting pivot grid data.
+"""
+
 import logging
+import time
 from typing import Any
 
-from scrapers.base import TBBApiClient
+from scrapers.base import TBBScraper
 
 logger = logging.getLogger(__name__)
 
+REGIONS_PAGE = "index.php?/tbb/report_bolgeler"
 
-class RegionScraper:
-    """Scrapes regional statistics from TBB API.
 
-    Chain: blgYillarAll → blgParametrelerAll → blgBolgelerAll → blgDegerler
-    """
+class RegionScraper(TBBScraper):
 
-    def __init__(self, client: TBBApiClient | None = None):
-        self.client = client or TBBApiClient()
+    def _navigate_to_page(self):
+        self.navigate(REGIONS_PAGE)
+        time.sleep(5)
+        self.dismiss_tour()
 
-    def fetch_years(self) -> list[dict]:
-        """Fetch available years for regional statistics."""
-        data = self.client.call("blgYillarAll")
-        logger.info("Fetched %d years", len(data) if isinstance(data, list) else 0)
-        return data if isinstance(data, list) else []
+    def _select_filters(self):
+        """Select default filters on the regions page.
 
-    def fetch_parameters(self) -> list[dict]:
-        """Fetch available parameters/metrics."""
-        data = self.client.call("blgParametrelerAll")
-        return data if isinstance(data, list) else []
+        The page has three dxList widgets:
+        - ``#bolgelerList``  (regions/cities)
+        - ``#yillarList``    (years)
+        - ``#parametrelerList`` (parameters/metrics)
+        """
+        # Select "Tüm Bölgeler" (index 0 = all regions)
+        self.select_dx_list_items("bolgelerList", indices=[0])
+        time.sleep(1)
 
-    def fetch_regions(self) -> list[dict]:
-        """Fetch available regions."""
-        data = self.client.call("blgBolgelerAll")
-        return data if isinstance(data, list) else []
+        # Select first 3 years (most recent)
+        self.select_dx_list_items("yillarList", indices=[0, 1, 2])
+        time.sleep(1)
 
-    def fetch_values(
-        self,
-        year_id: int,
-        parameter_id: int,
-        region_ids: list[int],
-    ) -> list[dict]:
-        """Fetch regional values for a year/parameter/region combination."""
-        data = self.client.call(
-            "blgDegerler",
-            {
-                "yilId": year_id,
-                "parametreId": parameter_id,
-                "bolgeIds": region_ids,
-            },
-        )
-        return data if isinstance(data, list) else []
+        # Select all parameters
+        self.select_dx_list_items("parametrelerList")
+        time.sleep(1)
+
+    def scrape_region_data(self) -> tuple[list[dict], list[dict]]:
+        """Navigate, select filters, generate report, extract data."""
+        self._navigate_to_page()
+        self._select_filters()
+
+        # Region page doesn't require TP/YP/TOPLAM flags for validation,
+        # but showPivotResults checks bolgeler/yillar/parametreler arrays.
+
+        # Read year info from the selected object
+        period_info = self.execute_js("""
+            var periods = [];
+            if (typeof selected === 'undefined') return periods;
+            var yillar = selected.yillar || [];
+            for (var i = 0; i < yillar.length; i++) {
+                periods.push({year: yillar[i], month: 0, month_str: ''});
+            }
+            return periods;
+        """) or []
+        logger.info("Periods: %s", period_info)
+
+        self.generate_report(wait_seconds=30)
+
+        pivot_records = self.extract_pivot_data()
+        logger.info("Extracted %d pivot records for regions", len(pivot_records))
+
+        return pivot_records, period_info
 
     def scrape_all(
         self,
-        year_ids: list[int] | None = None,
+        year_ids: list[str] | None = None,
     ) -> list[dict[str, Any]]:
-        """Full scrape pipeline: years → parameters → regions → values.
-
-        Args:
-            year_ids: Specific year IDs to scrape. If None, scrapes all.
-
-        Returns:
-            List of raw value records from the API.
-        """
-        all_values = []
-
-        years = self.fetch_years()
-        if year_ids:
-            years = [y for y in years if y.get("ID") in year_ids]
-
-        parameters = self.fetch_parameters()
-        regions = self.fetch_regions()
-        region_ids = [r["ID"] for r in regions if "ID" in r]
-
-        if not region_ids:
-            logger.warning("No regions found")
+        """Full scrape: generate report and extract regional data."""
+        try:
+            pivot_records, period_info = self.scrape_region_data()
+        except Exception as e:
+            logger.error("Failed to scrape region data: %s", e)
             return []
 
-        for year in years:
-            yid = year["ID"]
-            logger.info("Processing year: %s (ID=%d)", year.get("YIL", "?"), yid)
+        if not pivot_records:
+            logger.warning("No region data found")
+            return []
 
-            for param in parameters:
-                param_id = param.get("ID")
-                if param_id is None:
-                    continue
+        all_records: list[dict[str, Any]] = []
+        for record in pivot_records:
+            rec = dict(record)
 
-                values = self.fetch_values(yid, param_id, region_ids)
-                for v in values:
-                    v["_year"] = year
-                    v["_parameter"] = param
-                all_values.extend(values)
+            # _col_text is the year (e.g. "2024")
+            col_text = rec.pop("_col_text", "")
+            year_id, _ = self.parse_turkish_period(col_text)
+            rec["_year_id"] = year_id
+            rec["_year_text"] = col_text
 
-            logger.info("Year %d: total %d records so far", yid, len(all_values))
+            # Map pivot row fields to expected keys
+            if "SEÇİLMİŞ KALEMLER" in rec:
+                rec["_parameter_text"] = rec["SEÇİLMİŞ KALEMLER"]
+            if "İL/BÖLGE" in rec:
+                rec["Bölge"] = rec["İL/BÖLGE"]
 
-        logger.info("Total regional records scraped: %d", len(all_values))
-        return all_values
+            # Region pivot has a single data field called "TP"
+            # Rename to "Toplam" for consistency with transformer
+            if "TP" in rec and "Toplam" not in rec:
+                rec["Toplam"] = rec.pop("TP")
+
+            all_records.append(rec)
+
+        logger.info("Total regional records scraped: %d", len(all_records))
+        return all_records

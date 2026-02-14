@@ -1,5 +1,9 @@
-requests==2.31.0
+selenium==4.17.2
+webdriver-manager==4.0.1
+beautifulsoup4==4.12.3
+lxml==5.1.0
 tenacity==8.2.3
+requests==2.31.0
 urllib3==2.1.0
 clickhouse-driver==0.2.6
 psycopg2-binary==2.9.9

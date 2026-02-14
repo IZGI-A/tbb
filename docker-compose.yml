@@ -5,6 +5,8 @@ x-airflow-common: &airflow-common
     context: .
     dockerfile: docker/airflow/Dockerfile
   env_file: .env
+  environment:
+    - PYTHONPATH=/opt/airflow/source
   volumes:
     - ./dags:/opt/airflow/dags
     - ./source:/opt/airflow/source
@@ -28,7 +30,7 @@ services:
       - postgres-data:/var/lib/postgresql/data
       - ./docker/postgres/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-tbb_user}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-tbb_user} -d ${POSTGRES_DB:-tbb}"]
       interval: 10s
       timeout: 5s
       retries: 5

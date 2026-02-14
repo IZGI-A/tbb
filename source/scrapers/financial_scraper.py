@@ -1,105 +1,169 @@
+"""Scrapes financial statements from TBB verisistemi via Selenium.
+
+Navigates to the financial tables page (DevExtreme UI), selects table type
+and bank group via treeview controls, triggers report generation, and
+parses the resulting pivot grid.
+"""
+
 import logging
+import time
 from typing import Any
 
-from scrapers.base import TBBApiClient
+from scrapers.base import TBBScraper
 
 logger = logging.getLogger(__name__)
 
+FINANCIAL_PAGE = "index.php?/tbb/report_mali"
 
-class FinancialScraper:
-    """Scrapes financial statements from TBB API.
+# The .btn-dx-select buttons appear in DOM order:
+# index 0 → SOLO, index 1 → CONSOLIDATED
+TABLE_TYPES = {
+    "solo": {"index": 0, "label": "TFRS9-SOLO"},
+    "consolidated": {"index": 1, "label": "TFRS9-KONSOLIDE"},
+}
 
-    Chain: donemler → maliTablolarAll → bankalar → degerler
-    """
+BANK_GROUP_ALL = 5  # Turkiye Bankacilik Sistemi
 
-    def __init__(self, client: TBBApiClient | None = None):
-        self.client = client or TBBApiClient()
 
-    def fetch_periods(self) -> list[dict]:
-        """Fetch available periods (year/month combinations)."""
-        data = self.client.call("donemler")
-        logger.info("Fetched %d periods", len(data) if isinstance(data, list) else 0)
-        return data if isinstance(data, list) else []
+class FinancialScraper(TBBScraper):
 
-    def fetch_statements(self, period_id: int) -> list[dict]:
-        """Fetch all financial statement types for a period."""
-        data = self.client.call("maliTablolarAll", {"donemId": period_id})
-        return data if isinstance(data, list) else []
+    def _navigate_to_page(self):
+        self.navigate(FINANCIAL_PAGE)
+        time.sleep(5)
+        self.dismiss_tour()
 
-    def fetch_banks(self, period_id: int) -> list[dict]:
-        """Fetch banks available for a period."""
-        data = self.client.call("bankalar", {"donemId": period_id})
-        return data if isinstance(data, list) else []
+    def _select_table_type(self, table_key: str = "solo", select_all: bool = True):
+        """Select a financial table type from the treeview."""
+        info = TABLE_TYPES.get(table_key, TABLE_TYPES["solo"])
+        if select_all:
+            self.click_dx_select_all(index=info["index"])
+        else:
+            self.click_dx_select_only(index=info["index"])
+        time.sleep(2)
+        logger.info("Selected table type: %s (select_all=%s)", table_key, select_all)
 
-    def fetch_values(
+    def _select_bank_group(self, group_id: int = BANK_GROUP_ALL):
+        """Select a bank group via JS."""
+        self.execute_js(f"bankaGruplari_select(0, {group_id})")
+        time.sleep(2)
+        logger.info("Selected bank group id=%d", group_id)
+
+    def scrape_financial_data(
         self,
-        period_id: int,
-        statement_id: int,
-        bank_ids: list[int],
-    ) -> list[dict]:
-        """Fetch actual financial values for a statement/period/bank combination."""
-        data = self.client.call(
-            "degerler",
-            {
-                "donemId": period_id,
-                "maliTabloId": statement_id,
-                "bankaIds": bank_ids,
-            },
+        table_key: str = "solo",
+        bank_group_id: int = BANK_GROUP_ALL,
+    ) -> tuple[list[dict[str, Any]], list[dict]]:
+        """Navigate, configure filters, generate report, and extract data.
+
+        Returns (pivot_records, period_info).
+        """
+        self._navigate_to_page()
+
+        self._select_table_type(table_key, select_all=True)
+        self._select_bank_group(bank_group_id)
+
+        # Distribution flags must be set before generating the report
+        self.set_distribution_flags(tp=True, yp=True, toplam=True)
+
+        # Read period metadata from the JS data model
+        period_info = self.get_periods_from_js()
+        logger.info("Periods: %s", period_info)
+
+        # Generate the pivot report via JS
+        self.generate_report(wait_seconds=30)
+
+        # Extract pivot data
+        pivot_records = self.extract_pivot_data(pivot_selector="#pivotBanka1")
+        logger.info(
+            "Extracted %d pivot records for table=%s", len(pivot_records), table_key,
         )
-        return data if isinstance(data, list) else []
+
+        return pivot_records, period_info
 
     def scrape_all(
         self,
-        period_ids: list[int] | None = None,
+        table_keys: list[str] | None = None,
     ) -> list[dict[str, Any]]:
-        """Full scrape pipeline: periods → statements → banks → values.
+        """Full scrape: generate reports for each table type and extract data.
 
         Args:
-            period_ids: Specific period IDs to scrape. If None, scrapes all.
+            table_keys: Table types to scrape ('solo', 'consolidated').
+                        If None, scrapes only 'solo'.
 
         Returns:
-            List of raw value records from the API.
+            list[dict] with keys compatible with transform_financial.
         """
-        all_values = []
+        if table_keys is None:
+            table_keys = ["solo"]
 
-        periods = self.fetch_periods()
-        if period_ids:
-            periods = [p for p in periods if p.get("ID") in period_ids]
+        all_records: list[dict[str, Any]] = []
 
-        for period in periods:
-            pid = period["ID"]
-            logger.info(
-                "Processing period: %s/%s (ID=%d)",
-                period.get("YIL", "?"),
-                period.get("AY", "?"),
-                pid,
-            )
+        for table_key in table_keys:
+            table_label = TABLE_TYPES.get(table_key, {}).get("label", table_key)
 
-            statements = self.fetch_statements(pid)
-            banks = self.fetch_banks(pid)
-            bank_ids = [b["ID"] for b in banks if "ID" in b]
-
-            if not bank_ids:
-                logger.warning("No banks found for period %d", pid)
+            try:
+                pivot_records, period_info = self.scrape_financial_data(
+                    table_key=table_key,
+                )
+            except Exception as e:
+                logger.error("Failed to scrape table '%s': %s", table_key, e)
                 continue
 
-            for stmt in statements:
-                stmt_id = stmt.get("ID")
-                if stmt_id is None:
-                    continue
+            if not pivot_records:
+                logger.warning("No data for table '%s'", table_key)
+                continue
 
-                values = self.fetch_values(pid, stmt_id, bank_ids)
-                # Enrich each value with period metadata
-                for v in values:
-                    v["_period"] = period
-                    v["_statement"] = stmt
-                all_values.extend(values)
-
+            records = self._enrich_records(pivot_records, period_info, table_label)
+            all_records.extend(records)
             logger.info(
-                "Period %d: collected %d value records",
-                pid,
-                len(all_values),
+                "Table '%s': %d records (total: %d)",
+                table_key, len(records), len(all_records),
             )
 
-        logger.info("Total financial records scraped: %d", len(all_values))
-        return all_values
+        logger.info("Total financial records scraped: %d", len(all_records))
+        return all_records
+
+    def _enrich_records(
+        self,
+        pivot_records: list[dict],
+        period_info: list[dict],
+        statement_label: str,
+    ) -> list[dict[str, Any]]:
+        """Add period and statement metadata to pivot records."""
+        # Build a lookup: "YYYY M" → period dict
+        period_lookup: dict[str, dict] = {}
+        for p in period_info:
+            key = f"{p['year']} {p['month']}"
+            period_lookup[key] = p
+
+        enriched: list[dict[str, Any]] = []
+        for record in pivot_records:
+            rec = dict(record)
+
+            # Parse period from _col_text (e.g. "2025 9")
+            col_text = rec.pop("_col_text", "")
+            pinfo = period_lookup.get(col_text)
+            if pinfo:
+                rec["_year_id"] = pinfo["year"]
+                rec["_month_id"] = pinfo["month"]
+                rec["_period_text"] = f"{pinfo['year']} {pinfo.get('month_str', pinfo['month'])}"
+            else:
+                year_id, month_id = self.parse_turkish_period(col_text)
+                rec["_year_id"] = year_id
+                rec["_month_id"] = month_id
+                rec["_period_text"] = col_text
+
+            rec["_statement_text"] = statement_label
+
+            # Map pivot row fields to transformer-compatible keys
+            # Row fields from pivot: MUHASEBE SİSTEMİ, SEÇİLMİŞ KALEMLER, BANKA / BANKA GRUP
+            if "SEÇİLMİŞ KALEMLER" in rec:
+                rec["Ana Kalem"] = rec.pop("SEÇİLMİŞ KALEMLER")
+            if "BANKA / BANKA GRUP" in rec:
+                rec["Banka"] = rec.pop("BANKA / BANKA GRUP")
+            if "MUHASEBE SİSTEMİ" in rec:
+                rec["Muhasebe Sistemi"] = rec.pop("MUHASEBE SİSTEMİ")
+
+            enriched.append(rec)
+
+        return enriched

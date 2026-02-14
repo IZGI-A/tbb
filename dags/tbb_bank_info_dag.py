@@ -1,7 +1,10 @@
 """Airflow DAG for TBB Bank Info ETL pipeline.
 
+DISABLED: The bank information page has been removed from TBB verisistemi.
+This DAG is paused upon creation and will not run automatically.
+
 Schedule: Monthly (1st of month, 06:00 UTC)
-Chain: fetch_banks → transform → load_postgres
+Chain: scrape_banks → transform → load_postgres
 """
 
 import json
@@ -28,12 +31,13 @@ def _ensure_staging_dir():
     os.makedirs(STAGING_DIR, exist_ok=True)
 
 
-def fetch_banks(**context):
+def scrape_banks(**context):
     from scrapers.bank_info_scraper import BankInfoScraper
 
     _ensure_staging_dir()
-    scraper = BankInfoScraper()
-    raw_data = scraper.scrape_all()
+
+    with BankInfoScraper() as scraper:
+        raw_data = scraper.scrape_all()
 
     staging_path = os.path.join(STAGING_DIR, f"raw_{context['ds_nodash']}.json")
     with open(staging_path, "w") as f:
@@ -46,7 +50,10 @@ def fetch_banks(**context):
 def transform(**context):
     from etl.transformers import transform_bank_info
 
-    staging_path = context["ti"].xcom_pull(task_ids="fetch_banks", key="staging_path")
+    staging_path = context["ti"].xcom_pull(task_ids="scrape_banks", key="staging_path")
+    if not staging_path:
+        staging_path = os.path.join(STAGING_DIR, f"raw_{context['ds_nodash']}.json")
+        logger.info("XCom miss — falling back to %s", staging_path)
     with open(staging_path) as f:
         raw_data = json.load(f)
 
@@ -64,6 +71,9 @@ def load_postgres(**context):
     from etl.postgres_loader import load_all_bank_data
 
     transformed_path = context["ti"].xcom_pull(task_ids="transform", key="transformed_path")
+    if not transformed_path:
+        transformed_path = os.path.join(STAGING_DIR, f"transformed_{context['ds_nodash']}.json")
+        logger.info("XCom miss — falling back to %s", transformed_path)
     with open(transformed_path) as f:
         data = json.load(f)
 
@@ -74,16 +84,17 @@ def load_postgres(**context):
 with DAG(
     dag_id="tbb_bank_info",
     default_args=default_args,
-    description="TBB Bank Info ETL Pipeline",
+    description="TBB Bank Info ETL Pipeline — DISABLED (page removed)",
     schedule_interval="0 6 1 * *",  # 1st of month, 06:00
     start_date=datetime(2024, 1, 1),
     catchup=False,
-    tags=["tbb", "bank_info"],
+    is_paused_upon_creation=True,
+    tags=["tbb", "bank_info", "disabled"],
 ) as dag:
 
-    t_fetch = PythonOperator(
-        task_id="fetch_banks",
-        python_callable=fetch_banks,
+    t_scrape = PythonOperator(
+        task_id="scrape_banks",
+        python_callable=scrape_banks,
     )
 
     t_transform = PythonOperator(
@@ -96,4 +107,4 @@ with DAG(
         python_callable=load_postgres,
     )
 
-    t_fetch >> t_transform >> t_load
+    t_scrape >> t_transform >> t_load
