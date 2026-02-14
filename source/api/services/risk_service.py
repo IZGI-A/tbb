@@ -15,10 +15,11 @@ async def get_data(
     ch: Client,
     redis: aioredis.Redis,
     report_name: str | None = None,
+    category: str | None = None,
     year: int | None = None,
     month: int | None = None,
 ) -> list[dict]:
-    cache_key = f"risk:data:{report_name}:{year}:{month}"
+    cache_key = f"risk:data:{report_name}:{category}:{year}:{month}"
     cached = await redis.get(cache_key)
     if cached:
         return json.loads(cached)
@@ -28,6 +29,9 @@ async def get_data(
     if report_name:
         conditions.append("report_name = %(report_name)s")
         params["report_name"] = report_name
+    if category:
+        conditions.append("category = %(category)s")
+        params["category"] = category
     if year:
         conditions.append("year_id = %(year)s")
         params["year"] = year

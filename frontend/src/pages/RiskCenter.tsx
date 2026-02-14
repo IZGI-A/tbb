@@ -2,18 +2,21 @@ import React, { useState } from 'react';
 import { Card, Select, Space, Table } from 'antd';
 import BarChart from '../components/charts/BarChart';
 import YearMonthFilter from '../components/filters/YearMonthFilter';
-import { useRiskCenterData, useRiskCenterReports, useRiskCenterPeriods } from '../hooks/useRiskCenter';
+import { useRiskCenterData, useRiskCenterReports, useRiskCenterPeriods, useRiskCenterCategories } from '../hooks/useRiskCenter';
 import type { RiskCenterRecord, PeriodInfo } from '../types';
 
 const RiskCenter: React.FC = () => {
   const [reportName, setReportName] = useState<string | undefined>();
+  const [category, setCategory] = useState<string | undefined>();
   const [year, setYear] = useState<number | undefined>();
   const [month, setMonth] = useState<number | undefined>();
 
   const { data: reports } = useRiskCenterReports();
   const { data: periods } = useRiskCenterPeriods();
+  const { data: categories } = useRiskCenterCategories(reportName ?? '');
   const { data: riskData, isLoading } = useRiskCenterData({
     report_name: reportName,
+    category,
     year,
     month,
   });
@@ -77,9 +80,22 @@ const RiskCenter: React.FC = () => {
             allowClear
             showSearch
             value={reportName}
-            onChange={setReportName}
+            onChange={(val: string | undefined) => {
+              setReportName(val);
+              setCategory(undefined);
+            }}
             style={{ width: 300 }}
             options={(reports ?? []).map((r: string) => ({ value: r, label: r }))}
+          />
+          <Select
+            placeholder="Kategori secin"
+            allowClear
+            showSearch
+            value={category}
+            onChange={setCategory}
+            style={{ width: 300 }}
+            options={(categories ?? []).map((c: string) => ({ value: c, label: c }))}
+            disabled={!reportName}
           />
           <YearMonthFilter
             years={years}
