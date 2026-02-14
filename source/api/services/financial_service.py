@@ -58,10 +58,8 @@ async def get_statements(
         FROM tbb.financial_statements FINAL
         {where}
         ORDER BY year_id DESC, month_id DESC
-        LIMIT %(limit)s OFFSET %(offset)s
+        LIMIT {int(limit)} OFFSET {int(offset)}
     """
-    params["limit"] = limit
-    params["offset"] = offset
 
     columns = [
         "accounting_system", "main_statement", "child_statement",
@@ -128,6 +126,20 @@ async def get_periods(ch: Client, redis: aioredis.Redis) -> list[dict]:
     """
     rows = ch.execute(query)
     data = [{"year_id": r[0], "month_id": r[1]} for r in rows]
+
+    await redis.setex(cache_key, CACHE_TTL, json.dumps(data))
+    return data
+
+
+async def get_bank_names(ch: Client, redis: aioredis.Redis) -> list[str]:
+    cache_key = "fin:bank_names"
+    cached = await redis.get(cache_key)
+    if cached:
+        return json.loads(cached)
+
+    query = "SELECT DISTINCT bank_name FROM tbb.financial_statements FINAL ORDER BY bank_name"
+    rows = ch.execute(query)
+    data = [r[0] for r in rows]
 
     await redis.setex(cache_key, CACHE_TTL, json.dumps(data))
     return data

@@ -1,6 +1,7 @@
 """Batch INSERT into ClickHouse tables."""
 
 import logging
+from datetime import datetime
 from typing import Any
 
 from db.clickhouse import get_clickhouse_client
@@ -8,6 +9,15 @@ from db.clickhouse import get_clickhouse_client
 logger = logging.getLogger(__name__)
 
 BATCH_SIZE = 10_000
+
+
+def _ensure_datetime(val: Any) -> datetime:
+    """Convert a value to datetime, handling strings from JSON serialization."""
+    if isinstance(val, datetime):
+        return val
+    if isinstance(val, str):
+        return datetime.fromisoformat(val)
+    return datetime.now()
 
 
 def _chunked(data: list, size: int):
@@ -30,10 +40,13 @@ def load_financial_statements(rows: list[dict[str, Any]]) -> int:
     ]
 
     for batch in _chunked(rows, BATCH_SIZE):
-        data = [
-            [row.get(col) for col in columns]
-            for row in batch
-        ]
+        data = []
+        for row in batch:
+            vals = [row.get(col) for col in columns]
+            # Ensure crawl_timestamp is a datetime object (not a string from JSON)
+            ts_idx = columns.index("crawl_timestamp")
+            vals[ts_idx] = _ensure_datetime(vals[ts_idx])
+            data.append(vals)
         client.execute(
             f"INSERT INTO tbb.financial_statements ({', '.join(columns)}) VALUES",
             data,
@@ -57,10 +70,12 @@ def load_region_statistics(rows: list[dict[str, Any]]) -> int:
     columns = ["region", "metric", "year_id", "value", "crawl_timestamp"]
 
     for batch in _chunked(rows, BATCH_SIZE):
-        data = [
-            [row.get(col) for col in columns]
-            for row in batch
-        ]
+        data = []
+        for row in batch:
+            vals = [row.get(col) for col in columns]
+            ts_idx = columns.index("crawl_timestamp")
+            vals[ts_idx] = _ensure_datetime(vals[ts_idx])
+            data.append(vals)
         client.execute(
             f"INSERT INTO tbb.region_statistics ({', '.join(columns)}) VALUES",
             data,
@@ -87,10 +102,12 @@ def load_risk_center(rows: list[dict[str, Any]]) -> int:
     ]
 
     for batch in _chunked(rows, BATCH_SIZE):
-        data = [
-            [row.get(col) for col in columns]
-            for row in batch
-        ]
+        data = []
+        for row in batch:
+            vals = [row.get(col) for col in columns]
+            ts_idx = columns.index("crawl_timestamp")
+            vals[ts_idx] = _ensure_datetime(vals[ts_idx])
+            data.append(vals)
         client.execute(
             f"INSERT INTO tbb.risk_center ({', '.join(columns)}) VALUES",
             data,

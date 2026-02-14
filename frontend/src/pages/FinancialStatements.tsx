@@ -3,7 +3,7 @@ import { Table, Card, Space, Select, Button } from 'antd';
 import { DownloadOutlined } from '@ant-design/icons';
 import LineChart from '../components/charts/LineChart';
 import YearMonthFilter from '../components/filters/YearMonthFilter';
-import { useFinancialStatements, useFinancialPeriods, useFinancialTimeSeries } from '../hooks/useFinancial';
+import { useFinancialStatements, useFinancialPeriods, useFinancialTimeSeries, useFinancialBankNames } from '../hooks/useFinancial';
 import type { FinancialRecord, PeriodInfo, TimeSeriesPoint } from '../types';
 
 const FinancialStatements: React.FC = () => {
@@ -19,6 +19,7 @@ const FinancialStatements: React.FC = () => {
     limit, offset: (page - 1) * limit,
   });
 
+  const { data: bankNames } = useFinancialBankNames();
   const { data: timeSeries, isLoading: tsLoading } = useFinancialTimeSeries({
     bank_name: bankName,
   });
@@ -96,7 +97,7 @@ const FinancialStatements: React.FC = () => {
             value={bankName}
             onChange={setBankName}
             style={{ width: 250 }}
-            options={[]} // Populated from bank list
+            options={(bankNames ?? []).map((b: string) => ({ value: b, label: b }))}
           />
           <Button icon={<DownloadOutlined />} onClick={handleExportCSV}>
             CSV Indir

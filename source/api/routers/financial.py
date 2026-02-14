@@ -49,6 +49,15 @@ async def periods(redis=Depends(get_redis_client)):
         ch.disconnect()
 
 
+@router.get("/bank-names")
+async def bank_names(redis=Depends(get_redis_client)):
+    ch = get_ch()
+    try:
+        return await financial_service.get_bank_names(ch, redis)
+    finally:
+        ch.disconnect()
+
+
 @router.get("/time-series")
 async def time_series(
     bank_name: str = Query(...),

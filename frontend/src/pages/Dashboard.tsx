@@ -9,7 +9,7 @@ const Dashboard: React.FC = () => {
   const { data: banks, isLoading: banksLoading } = useBanks();
   const { data: summary, isLoading: summaryLoading } = useFinancialSummary({});
   const { data: timeSeries, isLoading: tsLoading } = useFinancialTimeSeries({
-    bank_name: 'Sektor',
+    bank_name: 'Türkiye Bankacılık Sistemi',
   });
 
   const totalAssets = summary?.find(

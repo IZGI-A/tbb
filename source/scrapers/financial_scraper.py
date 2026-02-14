@@ -6,12 +6,20 @@ parses the resulting pivot grid.
 """
 
 import logging
+import re
 import time
 from typing import Any
 
 from scrapers.base import TBBScraper
 
 logger = logging.getLogger(__name__)
+
+# Regex to extract trailing item ID from text like "Balıkçılık (16330)"
+_ITEM_ID_RE = re.compile(r"\((\d+)\)\s*$")
+# Fallback: handle malformed IDs like "Diğer 103722)" (missing opening paren)
+_ITEM_ID_FALLBACK_RE = re.compile(r"\b(\d{4,})\)\s*$")
+# Regex to strip arrow prefix like "------>" or "->"
+_ARROW_RE = re.compile(r"^-*>\s*")
 
 FINANCIAL_PAGE = "index.php?/tbb/report_mali"
 
@@ -48,14 +56,46 @@ class FinancialScraper(TBBScraper):
         time.sleep(2)
         logger.info("Selected bank group id=%d", group_id)
 
+    def _extract_hierarchy_lookup(self) -> dict[int, dict]:
+        """Extract the item hierarchy from mlt_data_maliTablolar on the page.
+
+        Returns a dict mapping item ID → {name, parent_id, parent_name, root_name}.
+        """
+        result = self.execute_js("""
+            if (typeof mlt_data_maliTablolar === 'undefined') return null;
+            var lookup = mlt_data_maliTablolar;
+            var keys = Object.keys(lookup);
+            var out = {};
+            for (var i = 0; i < keys.length; i++) {
+                var it = lookup[keys[i]];
+                var parentItem = it.UST_UK ? lookup[it.UST_UK] : null;
+                out[it.UNIQUE_KEY] = {
+                    name: it.TR_ADI || '',
+                    parent_id: it.UST_UK || 0,
+                    parent_name: parentItem ? (parentItem.TR_ADI || '') : '',
+                    root_name: it.ROOT_TR_ADI || ''
+                };
+            }
+            return JSON.stringify(out);
+        """)
+        if not result:
+            logger.warning("Could not extract hierarchy lookup")
+            return {}
+        try:
+            raw = result if isinstance(result, dict) else __import__("json").loads(result)
+            return {int(k): v for k, v in raw.items()}
+        except Exception as e:
+            logger.warning("Failed to parse hierarchy lookup: %s", e)
+            return {}
+
     def scrape_financial_data(
         self,
         table_key: str = "solo",
         bank_group_id: int = BANK_GROUP_ALL,
-    ) -> tuple[list[dict[str, Any]], list[dict]]:
+    ) -> tuple[list[dict[str, Any]], list[dict], dict[int, dict]]:
         """Navigate, configure filters, generate report, and extract data.
 
-        Returns (pivot_records, period_info).
+        Returns (pivot_records, period_info, hierarchy_lookup).
         """
         self._navigate_to_page()
 
@@ -69,6 +109,10 @@ class FinancialScraper(TBBScraper):
         period_info = self.get_periods_from_js()
         logger.info("Periods: %s", period_info)
 
+        # Extract hierarchy before generating report (data is already loaded)
+        hierarchy = self._extract_hierarchy_lookup()
+        logger.info("Hierarchy lookup: %d items", len(hierarchy))
+
         # Generate the pivot report via JS
         self.generate_report(wait_seconds=30)
 
@@ -78,7 +122,7 @@ class FinancialScraper(TBBScraper):
             "Extracted %d pivot records for table=%s", len(pivot_records), table_key,
         )
 
-        return pivot_records, period_info
+        return pivot_records, period_info, hierarchy
 
     def scrape_all(
         self,
@@ -102,7 +146,7 @@ class FinancialScraper(TBBScraper):
             table_label = TABLE_TYPES.get(table_key, {}).get("label", table_key)
 
             try:
-                pivot_records, period_info = self.scrape_financial_data(
+                pivot_records, period_info, hierarchy = self.scrape_financial_data(
                     table_key=table_key,
                 )
             except Exception as e:
@@ -113,7 +157,9 @@ class FinancialScraper(TBBScraper):
                 logger.warning("No data for table '%s'", table_key)
                 continue
 
-            records = self._enrich_records(pivot_records, period_info, table_label)
+            records = self._enrich_records(
+                pivot_records, period_info, table_label, hierarchy,
+            )
             all_records.extend(records)
             logger.info(
                 "Table '%s': %d records (total: %d)",
@@ -123,13 +169,46 @@ class FinancialScraper(TBBScraper):
         logger.info("Total financial records scraped: %d", len(all_records))
         return all_records
 
+    @staticmethod
+    def _clean_item_name(text: str) -> str:
+        """Remove arrow prefix and trailing ID from an item name.
+
+        '------> Balıkçılık (16330)' → 'Balıkçılık'
+        '-> I. FİNANSAL VARLIKLAR (Net) (9996)' → 'I. FİNANSAL VARLIKLAR (Net)'
+        'Diğer 103722)' → 'Diğer'
+        """
+        # Strip arrow prefix
+        text = _ARROW_RE.sub("", text)
+        # Strip trailing numeric ID in parens, but keep non-numeric parens like "(Net)"
+        text = _ITEM_ID_RE.sub("", text)
+        # Handle malformed IDs without opening paren (e.g. "Diğer 103722)")
+        text = _ITEM_ID_FALLBACK_RE.sub("", text)
+        return text.strip()
+
+    @staticmethod
+    def _extract_item_id(text: str) -> int | None:
+        """Extract the numeric ID from trailing parentheses.
+
+        '------> Balıkçılık (16330)' → 16330
+        'Diğer 103722)' → 103722
+        """
+        m = _ITEM_ID_RE.search(text)
+        if m:
+            return int(m.group(1))
+        # Fallback for malformed IDs
+        m = _ITEM_ID_FALLBACK_RE.search(text)
+        return int(m.group(1)) if m else None
+
     def _enrich_records(
         self,
         pivot_records: list[dict],
         period_info: list[dict],
         statement_label: str,
+        hierarchy: dict[int, dict] | None = None,
     ) -> list[dict[str, Any]]:
-        """Add period and statement metadata to pivot records."""
+        """Add period, statement, and hierarchy metadata to pivot records."""
+        hierarchy = hierarchy or {}
+
         # Build a lookup: "YYYY M" → period dict
         period_lookup: dict[str, dict] = {}
         for p in period_info:
@@ -156,13 +235,34 @@ class FinancialScraper(TBBScraper):
             rec["_statement_text"] = statement_label
 
             # Map pivot row fields to transformer-compatible keys
-            # Row fields from pivot: MUHASEBE SİSTEMİ, SEÇİLMİŞ KALEMLER, BANKA / BANKA GRUP
-            if "SEÇİLMİŞ KALEMLER" in rec:
-                rec["Ana Kalem"] = rec.pop("SEÇİLMİŞ KALEMLER")
+            raw_kalem = rec.pop("SEÇİLMİŞ KALEMLER", "")
             if "BANKA / BANKA GRUP" in rec:
                 rec["Banka"] = rec.pop("BANKA / BANKA GRUP")
             if "MUHASEBE SİSTEMİ" in rec:
                 rec["Muhasebe Sistemi"] = rec.pop("MUHASEBE SİSTEMİ")
+
+            # Split into Ana Kalem (parent) and Alt Kalem (self) using hierarchy
+            item_id = self._extract_item_id(raw_kalem)
+
+            if item_id and item_id in hierarchy:
+                info = hierarchy[item_id]
+                # Use hierarchy's own name (TR_ADI) for cleaner formatting
+                item_name = self._clean_item_name(info.get("name", raw_kalem))
+                parent_name = self._clean_item_name(info.get("parent_name", ""))
+                root_name = info.get("root_name", "").strip()
+
+                # If parent is ROOT (parent_name matches root table name or
+                # parent has no further parent), this is a top-level item
+                if not parent_name or parent_name == root_name:
+                    rec["Ana Kalem"] = item_name
+                    rec["Alt Kalem"] = ""
+                else:
+                    rec["Ana Kalem"] = parent_name
+                    rec["Alt Kalem"] = item_name
+            else:
+                # Fallback: no hierarchy data, put everything in Ana Kalem
+                rec["Ana Kalem"] = self._clean_item_name(raw_kalem)
+                rec["Alt Kalem"] = ""
 
             enriched.append(rec)
 

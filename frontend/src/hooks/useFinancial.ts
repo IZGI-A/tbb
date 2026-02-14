@@ -23,6 +23,13 @@ export function useFinancialPeriods() {
   });
 }
 
+export function useFinancialBankNames() {
+  return useQuery<string[]>({
+    queryKey: ['financial', 'bank-names'],
+    queryFn: () => financialApi.getBankNames().then(r => r.data),
+  });
+}
+
 export function useFinancialTimeSeries(params: Record<string, unknown>) {
   return useQuery<TimeSeriesPoint[]>({
     queryKey: ['financial', 'time-series', params],
