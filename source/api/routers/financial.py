@@ -12,6 +12,8 @@ async def list_statements(
     month: int | None = Query(None),
     bank_name: str | None = Query(None),
     accounting_system: str | None = Query(None),
+    main_statement: str | None = Query(None),
+    child_statement: str | None = Query(None),
     limit: int = Query(100, ge=1, le=1000),
     offset: int = Query(0, ge=0),
     redis=Depends(get_redis_client),
@@ -21,6 +23,7 @@ async def list_statements(
         return await financial_service.get_statements(
             ch, redis, year=year, month=month,
             bank_name=bank_name, accounting_system=accounting_system,
+            main_statement=main_statement, child_statement=child_statement,
             limit=limit, offset=offset,
         )
     finally:
@@ -54,6 +57,27 @@ async def bank_names(redis=Depends(get_redis_client)):
     ch = get_ch()
     try:
         return await financial_service.get_bank_names(ch, redis)
+    finally:
+        ch.disconnect()
+
+
+@router.get("/main-statements")
+async def main_statements(redis=Depends(get_redis_client)):
+    ch = get_ch()
+    try:
+        return await financial_service.get_main_statements(ch, redis)
+    finally:
+        ch.disconnect()
+
+
+@router.get("/child-statements")
+async def child_statements(
+    main_statement: str | None = Query(None),
+    redis=Depends(get_redis_client),
+):
+    ch = get_ch()
+    try:
+        return await financial_service.get_child_statements(ch, redis, main_statement=main_statement)
     finally:
         ch.disconnect()
 

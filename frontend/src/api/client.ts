@@ -20,6 +20,10 @@ export const financialApi = {
     apiClient.get('/financial/time-series', { params }),
   getBankNames: () =>
     apiClient.get('/financial/bank-names'),
+  getMainStatements: () =>
+    apiClient.get('/financial/main-statements'),
+  getChildStatements: (params: Record<string, unknown>) =>
+    apiClient.get('/financial/child-statements', { params }),
 };
 
 // Regions

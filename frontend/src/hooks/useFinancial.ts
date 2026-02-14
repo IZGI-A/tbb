@@ -30,6 +30,22 @@ export function useFinancialBankNames() {
   });
 }
 
+export function useFinancialMainStatements() {
+  return useQuery<string[]>({
+    queryKey: ['financial', 'main-statements'],
+    queryFn: () => financialApi.getMainStatements().then(r => r.data),
+  });
+}
+
+export function useFinancialChildStatements(mainStatement?: string) {
+  return useQuery<string[]>({
+    queryKey: ['financial', 'child-statements', mainStatement],
+    queryFn: () => financialApi.getChildStatements(
+      mainStatement ? { main_statement: mainStatement } : {}
+    ).then(r => r.data),
+  });
+}
+
 export function useFinancialTimeSeries(params: Record<string, unknown>) {
   return useQuery<TimeSeriesPoint[]>({
     queryKey: ['financial', 'time-series', params],

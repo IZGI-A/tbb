@@ -31,6 +31,10 @@ TABLE_TYPES = {
 }
 
 BANK_GROUP_ALL = 5  # Turkiye Bankacilik Sistemi
+BANK_BATCH_SIZE = 5  # Banks per batch to avoid tab crash
+
+# Bank group IDs to scrape (each generates a separate report with group name as bank_name)
+BANK_GROUP_IDS = [1, 2, 3, 4, 9, 13]
 
 
 class FinancialScraper(TBBScraper):
@@ -55,6 +59,44 @@ class FinancialScraper(TBBScraper):
         self.execute_js(f"bankaGruplari_select(0, {group_id})")
         time.sleep(2)
         logger.info("Selected bank group id=%d", group_id)
+
+    def _get_available_banks(self) -> list[dict]:
+        """Get list of individual banks from the bankalarList dxList.
+
+        Returns list of {code, name} dicts.
+        """
+        result = self.execute_js("""
+            var list = $('#bankalarList').dxList('instance');
+            var items = list.option('items');
+            if (!items) return '[]';
+            var out = [];
+            for (var i = 0; i < items.length; i++) {
+                out.push({code: items[i].BANKA_KODU, name: items[i].TR_ADI, idx: i});
+            }
+            return JSON.stringify(out);
+        """)
+        if not result:
+            return []
+        try:
+            return __import__("json").loads(result) if isinstance(result, str) else result
+        except Exception:
+            return []
+
+    def _select_individual_banks(self, bank_indices: list[int]):
+        """Clear all selections and select specific banks by dxList index."""
+        # Clear previous selections
+        self.execute_js("""
+            clearBankaGruplari();
+            var list = $('#bankalarList').dxList('instance');
+            list.unselectAll();
+        """)
+        time.sleep(1)
+
+        # Select the specified banks
+        for idx in bank_indices:
+            self.execute_js(f"$('#bankalarList').dxList('instance').selectItem({idx});")
+        time.sleep(1)
+        logger.info("Selected %d individual banks", len(bank_indices))
 
     def _extract_hierarchy_lookup(self) -> dict[int, dict]:
         """Extract the item hierarchy from mlt_data_maliTablolar on the page.
@@ -127,12 +169,15 @@ class FinancialScraper(TBBScraper):
     def scrape_all(
         self,
         table_keys: list[str] | None = None,
+        include_individual_banks: bool = True,
     ) -> list[dict[str, Any]]:
         """Full scrape: generate reports for each table type and extract data.
 
         Args:
             table_keys: Table types to scrape ('solo', 'consolidated').
                         If None, scrapes only 'solo'.
+            include_individual_banks: If True, also scrape per-bank data
+                        in addition to the aggregate.
 
         Returns:
             list[dict] with keys compatible with transform_financial.
@@ -145,26 +190,101 @@ class FinancialScraper(TBBScraper):
         for table_key in table_keys:
             table_label = TABLE_TYPES.get(table_key, {}).get("label", table_key)
 
+            # --- Phase 1: Aggregate (Türkiye Bankacılık Sistemi) ---
             try:
-                pivot_records, period_info, hierarchy = self.scrape_financial_data(
-                    table_key=table_key,
+                pivot_records, period_info, hierarchy = (
+                    self.scrape_financial_data(table_key=table_key)
                 )
             except Exception as e:
                 logger.error("Failed to scrape table '%s': %s", table_key, e)
                 continue
 
-            if not pivot_records:
-                logger.warning("No data for table '%s'", table_key)
+            if pivot_records:
+                records = self._enrich_records(
+                    pivot_records, period_info, table_label, hierarchy,
+                )
+                all_records.extend(records)
+                logger.info(
+                    "Table '%s' aggregate: %d records", table_key, len(records),
+                )
+            else:
+                logger.warning("No aggregate data for table '%s'", table_key)
+
+            # --- Phase 2: Bank groups (each group as a separate bank_name) ---
+            logger.info("Scraping %d bank groups", len(BANK_GROUP_IDS))
+            for group_id in BANK_GROUP_IDS:
+                try:
+                    self._select_bank_group(group_id)
+                    self.set_distribution_flags(tp=True, yp=True, toplam=True)
+                    self.generate_report(wait_seconds=30)
+
+                    group_records = self.extract_pivot_data(
+                        pivot_selector="#pivotBanka1",
+                    )
+                    if group_records:
+                        enriched = self._enrich_records(
+                            group_records, period_info, table_label, hierarchy,
+                        )
+                        all_records.extend(enriched)
+                        logger.info(
+                            "Bank group %d: %d records (total: %d)",
+                            group_id, len(enriched), len(all_records),
+                        )
+                    else:
+                        logger.warning("No data for bank group %d", group_id)
+                except Exception as e:
+                    logger.error("Failed bank group %d: %s", group_id, e)
+
+            # --- Phase 3: Individual banks (in batches) ---
+            if not include_individual_banks:
                 continue
 
-            records = self._enrich_records(
-                pivot_records, period_info, table_label, hierarchy,
-            )
-            all_records.extend(records)
+            banks = self._get_available_banks()
+            if not banks:
+                logger.warning("No individual banks found, skipping per-bank scrape")
+                continue
+
             logger.info(
-                "Table '%s': %d records (total: %d)",
-                table_key, len(records), len(all_records),
+                "Scraping %d individual banks in batches of %d",
+                len(banks), BANK_BATCH_SIZE,
             )
+
+            for batch_start in range(0, len(banks), BANK_BATCH_SIZE):
+                batch = banks[batch_start : batch_start + BANK_BATCH_SIZE]
+                batch_indices = [b["idx"] for b in batch]
+                batch_names = [b["name"] for b in batch]
+                batch_num = batch_start // BANK_BATCH_SIZE + 1
+                total_batches = (len(banks) + BANK_BATCH_SIZE - 1) // BANK_BATCH_SIZE
+
+                logger.info(
+                    "Bank batch %d/%d: %s",
+                    batch_num, total_batches, batch_names,
+                )
+
+                try:
+                    self._select_individual_banks(batch_indices)
+                    self.set_distribution_flags(tp=True, yp=True, toplam=True)
+                    self.generate_report(wait_seconds=45)
+
+                    batch_records = self.extract_pivot_data(
+                        pivot_selector="#pivotBanka1",
+                    )
+                    if batch_records:
+                        enriched = self._enrich_records(
+                            batch_records, period_info, table_label, hierarchy,
+                        )
+                        all_records.extend(enriched)
+                        logger.info(
+                            "Bank batch %d/%d: %d records (total: %d)",
+                            batch_num, total_batches, len(enriched), len(all_records),
+                        )
+                    else:
+                        logger.warning("No data for bank batch %d", batch_num)
+                except Exception as e:
+                    logger.error(
+                        "Failed bank batch %d (%s): %s",
+                        batch_num, batch_names, e,
+                    )
 
         logger.info("Total financial records scraped: %d", len(all_records))
         return all_records

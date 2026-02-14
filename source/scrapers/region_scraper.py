@@ -31,9 +31,12 @@ class RegionScraper(TBBScraper):
         - ``#yillarList``    (years)
         - ``#parametrelerList`` (parameters/metrics)
         """
-        # Select "Tüm Bölgeler" (index 0 = all regions)
-        self.select_dx_list_items("bolgelerList", indices=[0])
+        # Select all regions and cities (96 items)
+        # Use selectAll() directly because dxList virtual scrolling limits
+        # option('items') to the first ~40 visible items.
+        self.execute_js("$('#bolgelerList').dxList('instance').selectAll();")
         time.sleep(1)
+        logger.info("Selected all regions via selectAll()")
 
         # Select first 3 years (most recent)
         self.select_dx_list_items("yillarList", indices=[0, 1, 2])

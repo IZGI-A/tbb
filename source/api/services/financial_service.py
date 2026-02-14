@@ -23,10 +23,12 @@ async def get_statements(
     month: int | None = None,
     bank_name: str | None = None,
     accounting_system: str | None = None,
+    main_statement: str | None = None,
+    child_statement: str | None = None,
     limit: int = 100,
     offset: int = 0,
 ) -> dict:
-    cache_key = f"fin:stmts:{year}:{month}:{bank_name}:{accounting_system}:{limit}:{offset}"
+    cache_key = f"fin:stmts:{year}:{month}:{bank_name}:{accounting_system}:{main_statement}:{child_statement}:{limit}:{offset}"
     cached = await redis.get(cache_key)
     if cached:
         return json.loads(cached)
@@ -45,6 +47,12 @@ async def get_statements(
     if accounting_system:
         conditions.append("accounting_system = %(accounting_system)s")
         params["accounting_system"] = accounting_system
+    if main_statement:
+        conditions.append("main_statement = %(main_statement)s")
+        params["main_statement"] = main_statement
+    if child_statement:
+        conditions.append("child_statement = %(child_statement)s")
+        params["child_statement"] = child_statement
 
     where = f"WHERE {' AND '.join(conditions)}" if conditions else ""
 
@@ -140,6 +148,43 @@ async def get_bank_names(ch: Client, redis: aioredis.Redis) -> list[str]:
     query = "SELECT DISTINCT bank_name FROM tbb.financial_statements FINAL ORDER BY bank_name"
     rows = ch.execute(query)
     data = [r[0] for r in rows]
+
+    await redis.setex(cache_key, CACHE_TTL, json.dumps(data))
+    return data
+
+
+async def get_main_statements(ch: Client, redis: aioredis.Redis) -> list[str]:
+    cache_key = "fin:main_statements"
+    cached = await redis.get(cache_key)
+    if cached:
+        return json.loads(cached)
+
+    query = "SELECT DISTINCT main_statement FROM tbb.financial_statements FINAL ORDER BY main_statement"
+    rows = ch.execute(query)
+    data = [r[0] for r in rows if r[0]]
+
+    await redis.setex(cache_key, CACHE_TTL, json.dumps(data))
+    return data
+
+
+async def get_child_statements(
+    ch: Client,
+    redis: aioredis.Redis,
+    main_statement: str | None = None,
+) -> list[str]:
+    cache_key = f"fin:child_statements:{main_statement}"
+    cached = await redis.get(cache_key)
+    if cached:
+        return json.loads(cached)
+
+    if main_statement:
+        query = "SELECT DISTINCT child_statement FROM tbb.financial_statements FINAL WHERE main_statement = %(ms)s ORDER BY child_statement"
+        rows = ch.execute(query, {"ms": main_statement})
+    else:
+        query = "SELECT DISTINCT child_statement FROM tbb.financial_statements FINAL ORDER BY child_statement"
+        rows = ch.execute(query)
+
+    data = [r[0] for r in rows if r[0]]
 
     await redis.setex(cache_key, CACHE_TTL, json.dumps(data))
     return data

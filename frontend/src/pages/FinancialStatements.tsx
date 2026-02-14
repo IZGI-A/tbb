@@ -3,23 +3,28 @@ import { Table, Card, Space, Select, Button } from 'antd';
 import { DownloadOutlined } from '@ant-design/icons';
 import LineChart from '../components/charts/LineChart';
 import YearMonthFilter from '../components/filters/YearMonthFilter';
-import { useFinancialStatements, useFinancialPeriods, useFinancialTimeSeries, useFinancialBankNames } from '../hooks/useFinancial';
+import { useFinancialStatements, useFinancialPeriods, useFinancialTimeSeries, useFinancialBankNames, useFinancialMainStatements, useFinancialChildStatements } from '../hooks/useFinancial';
 import type { FinancialRecord, PeriodInfo, TimeSeriesPoint } from '../types';
 
 const FinancialStatements: React.FC = () => {
   const [year, setYear] = useState<number | undefined>();
   const [month, setMonth] = useState<number | undefined>();
   const [bankName, setBankName] = useState<string | undefined>();
+  const [mainStatement, setMainStatement] = useState<string | undefined>();
+  const [childStatement, setChildStatement] = useState<string | undefined>();
   const [page, setPage] = useState(1);
   const limit = 50;
 
   const { data: periods } = useFinancialPeriods();
   const { data: statementsData, isLoading } = useFinancialStatements({
     year, month, bank_name: bankName,
+    main_statement: mainStatement, child_statement: childStatement,
     limit, offset: (page - 1) * limit,
   });
 
   const { data: bankNames } = useFinancialBankNames();
+  const { data: mainStatements } = useFinancialMainStatements();
+  const { data: childStatements } = useFinancialChildStatements(mainStatement);
   const { data: timeSeries, isLoading: tsLoading } = useFinancialTimeSeries({
     bank_name: bankName,
   });
@@ -98,6 +103,31 @@ const FinancialStatements: React.FC = () => {
             onChange={setBankName}
             style={{ width: 250 }}
             options={(bankNames ?? []).map((b: string) => ({ value: b, label: b }))}
+          />
+          <Select
+            placeholder="Ana Kalem secin"
+            allowClear
+            showSearch
+            value={mainStatement}
+            onChange={(val: string | undefined) => {
+              setMainStatement(val);
+              setChildStatement(undefined);
+              setPage(1);
+            }}
+            style={{ width: 280 }}
+            options={(mainStatements ?? []).map((s: string) => ({ value: s, label: s }))}
+          />
+          <Select
+            placeholder="Alt Kalem secin"
+            allowClear
+            showSearch
+            value={childStatement}
+            onChange={(val: string | undefined) => {
+              setChildStatement(val);
+              setPage(1);
+            }}
+            style={{ width: 320 }}
+            options={(childStatements ?? []).map((s: string) => ({ value: s, label: s }))}
           />
           <Button icon={<DownloadOutlined />} onClick={handleExportCSV}>
             CSV Indir
