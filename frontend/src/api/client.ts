@@ -58,6 +58,8 @@ export const banksApi = {
     apiClient.get('/banks/'),
   search: (q: string) =>
     apiClient.get('/banks/search', { params: { q } }),
+  getDashboardStats: () =>
+    apiClient.get('/banks/dashboard-stats'),
   getBranches: (bankName: string, city?: string) =>
     apiClient.get(`/banks/${encodeURIComponent(bankName)}/branches`, { params: { city } }),
   getAtms: (bankName: string, city?: string) =>

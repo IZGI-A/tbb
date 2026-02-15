@@ -93,3 +93,10 @@ export interface HistoricalEvent {
   founding_date: string | null;
   historical_event: string | null;
 }
+
+export interface DashboardStats {
+  total_branches: number;
+  total_atms: number;
+  branch_by_city: { city: string; count: number }[];
+  atm_by_city: { city: string; count: number }[];
+}
