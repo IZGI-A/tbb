@@ -82,6 +82,24 @@ async def child_statements(
         ch.disconnect()
 
 
+@router.get("/ratio-types")
+async def ratio_types():
+    return await financial_service.get_ratio_types()
+
+
+@router.get("/ratios")
+async def ratios(
+    year: int = Query(...),
+    month: int = Query(...),
+    redis=Depends(get_redis_client),
+):
+    ch = get_ch()
+    try:
+        return await financial_service.get_financial_ratios(ch, redis, year=year, month=month)
+    finally:
+        ch.disconnect()
+
+
 @router.get("/time-series")
 async def time_series(
     bank_name: str = Query(...),

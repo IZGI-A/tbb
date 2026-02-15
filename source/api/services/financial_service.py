@@ -233,3 +233,105 @@ async def get_time_series(
 
     await redis.setex(cache_key, CACHE_TTL, json.dumps(data, default=str))
     return data
+
+
+# --- Financial Ratio Definitions ---
+_RATIO_DEFS = {
+    "ROA": {"label": "ROA (Aktif Karlılığı) %", "desc": "Net Kar / Toplam Aktif"},
+    "ROE": {"label": "ROE (Özkaynak Karlılığı) %", "desc": "Net Kar / Özkaynaklar"},
+    "NIM": {"label": "NIM (Net Faiz Marjı) %", "desc": "Net Faiz Geliri / Toplam Aktif"},
+    "PROVISION": {"label": "Karşılık Oranı %", "desc": "Beklenen Zarar Karşılıkları / Toplam Kredi"},
+    "LEVERAGE": {"label": "Kaldıraç (Özkaynak/Aktif) %", "desc": "Özkaynaklar / Toplam Aktif"},
+    "FX_SHARE": {"label": "YP Aktif Payı %", "desc": "YP Aktifler / Toplam Aktif"},
+}
+
+
+async def get_ratio_types() -> list[dict]:
+    """Return available ratio type definitions."""
+    return [{"key": k, **v} for k, v in _RATIO_DEFS.items()]
+
+
+async def get_financial_ratios(
+    ch: Client,
+    redis: aioredis.Redis,
+    year: int,
+    month: int,
+) -> list[dict]:
+    """Compute key financial ratios per bank for a given period."""
+    cache_key = f"fin:ratios:{year}:{month}"
+    cached = await redis.get(cache_key)
+    if cached:
+        return json.loads(cached)
+
+    query = """
+        SELECT
+            bank_name,
+            sumIf(amount_total, main_statement = '1. VARLIKLAR'
+                AND child_statement = 'XI. VARLIKLAR TOPLAMI') AS total_assets,
+            sumIf(amount_total, main_statement = '2. YÜKÜMLÜLÜKLER'
+                AND child_statement = 'XVI. ÖZKAYNAKLAR') AS equity,
+            sumIf(amount_total, main_statement = '4. GELİR-GİDER TABLOSU'
+                AND child_statement = 'XXV. DÖNEM NET KARI/ZARARI (XIX+XXIV)') AS net_profit,
+            sumIf(amount_total, main_statement = '4. GELİR-GİDER TABLOSU'
+                AND child_statement = 'III. NET FAİZ GELİRİ/GİDERİ (I - II)') AS net_interest_income,
+            sumIf(amount_total, main_statement = '1. VARLIKLAR'
+                AND child_statement = '2.1. Krediler') AS total_loans,
+            sumIf(amount_total, main_statement = '1. VARLIKLAR'
+                AND child_statement = '2.5 Beklenen Zarar Karşılıkları (-) (TFRS 9 uygulayan b.)') AS credit_provisions,
+            sumIf(amount_fc, main_statement = '1. VARLIKLAR'
+                AND child_statement = 'XI. VARLIKLAR TOPLAMI') AS assets_fc,
+            sumIf(amount_fc, main_statement = '2. YÜKÜMLÜLÜKLER'
+                AND child_statement = 'XVII. YÜKÜMLÜLÜKLER TOPLAMI') AS liabilities_fc
+        FROM tbb.financial_statements FINAL
+        WHERE year_id = %(year)s AND month_id = %(month)s
+          AND bank_name NOT IN (
+              'Türkiye Bankacılık Sistemi',
+              ' Mevduat Bankaları',
+              'Mevduat Bankaları',
+              'Kamusal Sermayeli Mevduat Bankaları',
+              'Özel Sermayeli Mevduat Bankaları',
+              'Yabancı Sermayeli Bankalar',
+              'Kalkınma ve Yatırım Bankaları',
+              'Tasarruf Mevduatı Sigorta Fonuna Devredilen Bankalar'
+          )
+        GROUP BY bank_name
+        HAVING total_assets > 0
+        ORDER BY total_assets DESC
+    """
+    rows = ch.execute(query, {"year": year, "month": month})
+
+    data = []
+    for r in rows:
+        bank = r[0]
+        total_assets = float(r[1]) if r[1] else 0
+        equity = float(r[2]) if r[2] else 0
+        net_profit = float(r[3]) if r[3] else 0
+        nim_val = float(r[4]) if r[4] else 0
+        total_loans = float(r[5]) if r[5] else 0
+        provisions = float(r[6]) if r[6] else 0
+        assets_fc = float(r[7]) if r[7] else 0
+        liabilities_fc = float(r[8]) if r[8] else 0
+
+        if total_assets <= 0:
+            continue
+
+        roa = round(net_profit / total_assets * 100, 2)
+        roe = round(net_profit / equity * 100, 2) if equity else None
+        nim = round(nim_val / total_assets * 100, 2)
+        prov_rate = round(abs(provisions) / total_loans * 100, 2) if total_loans else None
+        leverage = round(equity / total_assets * 100, 2)
+        fx_share = round(assets_fc / total_assets * 100, 2)
+
+        data.append({
+            "bank_name": bank,
+            "total_assets": total_assets,
+            "ROA": roa,
+            "ROE": roe,
+            "NIM": nim,
+            "PROVISION": prov_rate,
+            "LEVERAGE": leverage,
+            "FX_SHARE": fx_share,
+        })
+
+    await redis.setex(cache_key, CACHE_TTL, json.dumps(data, default=str))
+    return data

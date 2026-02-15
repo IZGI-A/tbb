@@ -24,6 +24,10 @@ export const financialApi = {
     apiClient.get('/financial/main-statements'),
   getChildStatements: (params: Record<string, unknown>) =>
     apiClient.get('/financial/child-statements', { params }),
+  getRatioTypes: () =>
+    apiClient.get('/financial/ratio-types'),
+  getRatios: (params: { year: number; month: number }) =>
+    apiClient.get('/financial/ratios', { params }),
 };
 
 // Regions
@@ -38,6 +42,10 @@ export const regionsApi = {
     apiClient.get('/regions/periods'),
   getComparison: (params: { metric: string; year: number }) =>
     apiClient.get('/regions/comparison', { params }),
+  getLoanDepositRatio: (year: number) =>
+    apiClient.get('/regions/loan-deposit-ratio', { params: { year } }),
+  getCreditHhi: (year: number) =>
+    apiClient.get('/regions/credit-hhi', { params: { year } }),
 };
 
 // Risk Center

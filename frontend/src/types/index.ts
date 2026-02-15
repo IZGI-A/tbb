@@ -94,6 +94,23 @@ export interface HistoricalEvent {
   historical_event: string | null;
 }
 
+export interface RatioType {
+  key: string;
+  label: string;
+  desc: string;
+}
+
+export interface BankRatios {
+  bank_name: string;
+  total_assets: number;
+  ROA: number | null;
+  ROE: number | null;
+  NIM: number | null;
+  PROVISION: number | null;
+  LEVERAGE: number | null;
+  FX_SHARE: number | null;
+}
+
 export interface DashboardStats {
   total_branches: number;
   total_atms: number;

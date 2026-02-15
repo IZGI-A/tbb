@@ -9,10 +9,10 @@ import {
 import LineChart from '../components/charts/LineChart';
 import BarChart from '../components/charts/BarChart';
 import PieChart from '../components/charts/PieChart';
-import { useFinancialSummary, useFinancialTimeSeries } from '../hooks/useFinancial';
+import { useFinancialSummary, useFinancialTimeSeries, useFinancialPeriods, useFinancialRatioTypes, useFinancialRatios } from '../hooks/useFinancial';
 import { useBanks, useBankDashboardStats } from '../hooks/useBanks';
-import { useRegionComparison, useRegionMetrics, useRegionPeriods } from '../hooks/useRegions';
-import type { BankInfo, DashboardStats } from '../types';
+import { useRegionComparison, useRegionMetrics, useRegionPeriods, useLoanDepositRatio, useCreditHhi } from '../hooks/useRegions';
+import type { BankInfo, BankRatios, DashboardStats } from '../types';
 
 const formatAmount = (val: number | null | undefined) => {
   if (!val) return '0';
@@ -31,9 +31,17 @@ const Dashboard: React.FC = () => {
   });
   const { data: regionMetrics } = useRegionMetrics();
   const { data: regionPeriods } = useRegionPeriods();
+  const { data: finPeriods } = useFinancialPeriods();
+  const { data: ratioTypes } = useFinancialRatioTypes();
 
   const [selectedMetric, setSelectedMetric] = useState<string>('');
   const [selectedYear, setSelectedYear] = useState<number>(0);
+  const [ldrYear, setLdrYear] = useState<number>(0);
+  const [hhiYear, setHhiYear] = useState<number>(0);
+  const [hhiSectors, setHhiSectors] = useState<string[]>([]);
+  const [ratioYear, setRatioYear] = useState<number>(0);
+  const [ratioMonth, setRatioMonth] = useState<number>(0);
+  const [selectedRatio, setSelectedRatio] = useState<string>('ROA');
 
   // Set default metric/year when data loads
   React.useEffect(() => {
@@ -46,12 +54,85 @@ const Dashboard: React.FC = () => {
     if (regionPeriods?.length && !selectedYear) {
       setSelectedYear(regionPeriods[0].year_id);
     }
-  }, [regionPeriods, selectedYear]);
+    if (regionPeriods?.length && !ldrYear) {
+      setLdrYear(regionPeriods[0].year_id);
+    }
+    if (regionPeriods?.length && !hhiYear) {
+      setHhiYear(regionPeriods[0].year_id);
+    }
+  }, [regionPeriods, selectedYear, ldrYear, hhiYear]);
+
+  React.useEffect(() => {
+    if (finPeriods?.length && !ratioYear) {
+      setRatioYear(finPeriods[0].year_id);
+      setRatioMonth(finPeriods[0].month_id);
+    }
+  }, [finPeriods, ratioYear]);
 
   const { data: regionComparison, isLoading: regionCompLoading } = useRegionComparison(
     selectedMetric,
     selectedYear,
   );
+
+  const { data: ldrData, isLoading: ldrLoading } = useLoanDepositRatio(ldrYear);
+  const { data: hhiData, isLoading: hhiLoading } = useCreditHhi(hhiYear);
+  const { data: ratioData, isLoading: ratioLoading } = useFinancialRatios(ratioYear, ratioMonth);
+
+  // Top 20 regions by LDR for chart readability
+  const ldrChartData = useMemo(() => {
+    if (!ldrData) return [];
+    return (ldrData as { region: string; ratio: number | null }[])
+      .filter((r) => r.ratio != null)
+      .slice(0, 20);
+  }, [ldrData]);
+
+  // HHI data with sector shares
+  type HhiRow = { region: string; hhi: number; dominant_sector: string; shares: Record<string, number> };
+  const hhiRows = (hhiData ?? []) as HhiRow[];
+
+  const allSectors = useMemo(() => {
+    if (!hhiRows.length) return [];
+    return Object.keys(hhiRows[0]?.shares ?? {}).sort();
+  }, [hhiRows]);
+
+  // Set default: all sectors selected
+  React.useEffect(() => {
+    if (allSectors.length && !hhiSectors.length) {
+      setHhiSectors(allSectors);
+    }
+  }, [allSectors, hhiSectors.length]);
+
+  const hhiFiltered = useMemo(() => {
+    if (!hhiRows.length || !hhiSectors.length) return [];
+    // Re-calculate HHI based on selected sectors only
+    return hhiRows
+      .map((r) => {
+        const filteredShares: Record<string, number> = {};
+        let total = 0;
+        for (const s of hhiSectors) {
+          const val = r.shares[s] ?? 0;
+          filteredShares[s] = val;
+          total += val;
+        }
+        return { ...r, filteredShares, filteredTotal: total };
+      })
+      .filter((r) => r.filteredTotal > 0)
+      .slice(0, 20);
+  }, [hhiRows, hhiSectors]);
+
+  // Financial ratio chart data
+  const ratioChartData = useMemo(() => {
+    if (!ratioData) return [];
+    return (ratioData as BankRatios[])
+      .filter((r) => r[selectedRatio as keyof BankRatios] != null)
+      .map((r) => ({
+        bank: r.bank_name.replace(/ A\.Ş\.?$/i, '').replace(/ Bankası$/i, ''),
+        value: r[selectedRatio as keyof BankRatios] as number,
+      }))
+      .sort((a, b) => b.value - a.value);
+  }, [ratioData, selectedRatio]);
+
+  const currentRatioType = ratioTypes?.find((t) => t.key === selectedRatio);
 
   const totalAssets = summary?.find(
     (s: { metric: string }) =>
@@ -188,7 +269,135 @@ const Dashboard: React.FC = () => {
         </Col>
       </Row>
 
-      {/* Row 4: Regional Comparison with Filters */}
+      {/* Row 4: Loan-to-Deposit Ratio */}
+      <Card style={{ marginBottom: 24 }}>
+        <Space wrap style={{ marginBottom: 16 }}>
+          <h4 style={{ margin: 0 }}>Kredi / Mevduat Orani</h4>
+          <Select
+            placeholder="Yil secin"
+            value={ldrYear || undefined}
+            onChange={setLdrYear}
+            style={{ width: 150 }}
+            options={regionPeriods?.map((p: { year_id: number }) => ({
+              value: p.year_id,
+              label: String(p.year_id),
+            }))}
+          />
+        </Space>
+        {ldrLoading ? (
+          <Spin />
+        ) : (
+          <BarChart
+            title={`Bolgesel Kredi/Mevduat Orani (${ldrYear || ''})`}
+            xData={ldrChartData.map((r) => r.region)}
+            series={[
+              {
+                name: 'Kredi/Mevduat Orani',
+                data: ldrChartData.map((r) => r.ratio),
+              },
+            ]}
+            loading={ldrLoading}
+            horizontal
+          />
+        )}
+      </Card>
+
+      {/* Row 5: Credit HHI Concentration with Sector Breakdown */}
+      <Card style={{ marginBottom: 24 }}>
+        <Space wrap style={{ marginBottom: 16 }}>
+          <h4 style={{ margin: 0 }}>Kredi Sektorel Yogunlasma (HHI)</h4>
+          <Select
+            placeholder="Yil secin"
+            value={hhiYear || undefined}
+            onChange={setHhiYear}
+            style={{ width: 150 }}
+            options={regionPeriods?.map((p: { year_id: number }) => ({
+              value: p.year_id,
+              label: String(p.year_id),
+            }))}
+          />
+          <Select
+            mode="multiple"
+            placeholder="Sektor secin"
+            value={hhiSectors}
+            onChange={setHhiSectors}
+            style={{ minWidth: 300 }}
+            options={allSectors.map((s) => ({ value: s, label: s }))}
+          />
+        </Space>
+        <p style={{ color: '#888', fontSize: 12, margin: '0 0 12px' }}>
+          HHI &lt; 1500: Dusuk yogunlasma | 1500-2500: Orta | &gt; 2500: Yuksek yogunlasma. Barlar sektorel paylari (%) gosterir.
+        </p>
+        {hhiLoading ? (
+          <Spin />
+        ) : (
+          <BarChart
+            title={`Sektorel Kredi Paylari ve HHI (${hhiYear || ''})`}
+            xData={hhiFiltered.map((r) => `${r.region} (HHI: ${r.hhi})`)}
+            series={hhiSectors.map((sector) => ({
+              name: sector,
+              data: hhiFiltered.map((r) => r.filteredShares[sector] ?? 0),
+            }))}
+            loading={hhiLoading}
+            horizontal
+            stacked
+          />
+        )}
+      </Card>
+
+      {/* Row 6: Financial Ratio Analysis */}
+      <Card style={{ marginBottom: 24 }}>
+        <Space wrap style={{ marginBottom: 16 }}>
+          <h4 style={{ margin: 0 }}>Finansal Oran Analizi</h4>
+          <Select
+            placeholder="Donem secin"
+            value={ratioYear && ratioMonth ? `${ratioYear}/${ratioMonth}` : undefined}
+            onChange={(val: string) => {
+              const [y, m] = val.split('/').map(Number);
+              setRatioYear(y);
+              setRatioMonth(m);
+            }}
+            style={{ width: 150 }}
+            options={finPeriods?.map((p) => ({
+              value: `${p.year_id}/${p.month_id}`,
+              label: `${p.year_id}/${p.month_id}`,
+            }))}
+          />
+          <Select
+            placeholder="Oran secin"
+            value={selectedRatio}
+            onChange={setSelectedRatio}
+            style={{ width: 280 }}
+            options={ratioTypes?.map((t) => ({
+              value: t.key,
+              label: t.label,
+            }))}
+          />
+        </Space>
+        {currentRatioType && (
+          <p style={{ color: '#888', fontSize: 12, margin: '0 0 12px' }}>
+            {currentRatioType.desc}
+          </p>
+        )}
+        {ratioLoading ? (
+          <Spin />
+        ) : (
+          <BarChart
+            title={`${currentRatioType?.label || selectedRatio} (${ratioYear}/${ratioMonth})`}
+            xData={ratioChartData.map((r) => r.bank)}
+            series={[
+              {
+                name: currentRatioType?.label || selectedRatio,
+                data: ratioChartData.map((r) => r.value),
+              },
+            ]}
+            loading={ratioLoading}
+            horizontal
+          />
+        )}
+      </Card>
+
+      {/* Row 7: Regional Comparison with Filters */}
       <Card style={{ marginBottom: 24 }}>
         <Space wrap style={{ marginBottom: 16 }}>
           <Select
