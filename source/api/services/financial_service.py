@@ -45,8 +45,8 @@ async def get_statements(
         conditions.append("bank_name = %(bank_name)s")
         params["bank_name"] = bank_name
     if accounting_system:
-        conditions.append("accounting_system = %(accounting_system)s")
-        params["accounting_system"] = accounting_system
+        conditions.append("accounting_system LIKE %(accounting_system)s")
+        params["accounting_system"] = f"%{accounting_system}%"
     if main_statement:
         conditions.append("main_statement = %(main_statement)s")
         params["main_statement"] = main_statement
@@ -87,8 +87,9 @@ async def get_summary(
     redis: aioredis.Redis,
     year: int | None = None,
     metric: str | None = None,
+    accounting_system: str | None = None,
 ) -> list[dict]:
-    cache_key = f"fin:summary:{year}:{metric}"
+    cache_key = f"fin:summary:{year}:{metric}:{accounting_system}"
     cached = await redis.get(cache_key)
     if cached:
         return json.loads(cached)
@@ -98,6 +99,9 @@ async def get_summary(
     if year:
         conditions.append("year_id = %(year)s")
         params["year"] = year
+    if accounting_system:
+        conditions.append("accounting_system LIKE %(accounting_system)s")
+        params["accounting_system"] = f"%{accounting_system}%"
 
     where = f"WHERE {' AND '.join(conditions)}" if conditions else ""
 
@@ -197,8 +201,9 @@ async def get_time_series(
     statement: str | None = None,
     from_year: int | None = None,
     to_year: int | None = None,
+    accounting_system: str | None = None,
 ) -> list[dict]:
-    cache_key = f"fin:ts:{bank_name}:{statement}:{from_year}:{to_year}"
+    cache_key = f"fin:ts:{bank_name}:{statement}:{from_year}:{to_year}:{accounting_system}"
     cached = await redis.get(cache_key)
     if cached:
         return json.loads(cached)
@@ -214,6 +219,9 @@ async def get_time_series(
     if to_year:
         conditions.append("year_id <= %(to_year)s")
         params["to_year"] = to_year
+    if accounting_system:
+        conditions.append("accounting_system LIKE %(accounting_system)s")
+        params["accounting_system"] = f"%{accounting_system}%"
 
     where = f"WHERE {' AND '.join(conditions)}"
 
@@ -256,9 +264,10 @@ async def get_financial_ratios(
     redis: aioredis.Redis,
     year: int,
     month: int,
+    accounting_system: str | None = None,
 ) -> list[dict]:
     """Compute key financial ratios per bank for a given period."""
-    cache_key = f"fin:ratios:{year}:{month}"
+    cache_key = f"fin:ratios:{year}:{month}:{accounting_system}"
     cached = await redis.get(cache_key)
     if cached:
         return json.loads(cached)
@@ -284,6 +293,7 @@ async def get_financial_ratios(
                 AND child_statement = 'XVII. YÜKÜMLÜLÜKLER TOPLAMI') AS liabilities_fc
         FROM tbb.financial_statements FINAL
         WHERE year_id = %(year)s AND month_id = %(month)s
+          AND accounting_system LIKE %(acct_sys)s
           AND bank_name NOT IN (
               'Türkiye Bankacılık Sistemi',
               ' Mevduat Bankaları',
@@ -298,7 +308,8 @@ async def get_financial_ratios(
         HAVING total_assets > 0
         ORDER BY total_assets DESC
     """
-    rows = ch.execute(query, {"year": year, "month": month})
+    acct_sys_pattern = f"%{accounting_system}%" if accounting_system else "%"
+    rows = ch.execute(query, {"year": year, "month": month, "acct_sys": acct_sys_pattern})
 
     data = []
     for r in rows:

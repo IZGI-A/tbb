@@ -26,7 +26,7 @@ export const financialApi = {
     apiClient.get('/financial/child-statements', { params }),
   getRatioTypes: () =>
     apiClient.get('/financial/ratio-types'),
-  getRatios: (params: { year: number; month: number }) =>
+  getRatios: (params: { year: number; month: number; accounting_system?: string }) =>
     apiClient.get('/financial/ratios', { params }),
 };
 

@@ -61,10 +61,10 @@ export function useFinancialRatioTypes() {
   });
 }
 
-export function useFinancialRatios(year: number, month: number) {
+export function useFinancialRatios(year: number, month: number, accountingSystem?: string) {
   return useQuery<BankRatios[]>({
-    queryKey: ['financial', 'ratios', year, month],
-    queryFn: () => financialApi.getRatios({ year, month }).then(r => r.data),
+    queryKey: ['financial', 'ratios', year, month, accountingSystem],
+    queryFn: () => financialApi.getRatios({ year, month, accounting_system: accountingSystem }).then(r => r.data),
     enabled: !!year && !!month,
   });
 }

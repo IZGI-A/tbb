@@ -23,17 +23,6 @@ const formatAmount = (val: number | null | undefined) => {
 };
 
 const Dashboard: React.FC = () => {
-  const { data: banks, isLoading: banksLoading } = useBanks();
-  const { data: dashStats, isLoading: dashStatsLoading } = useBankDashboardStats();
-  const { data: summary, isLoading: summaryLoading } = useFinancialSummary({});
-  const { data: timeSeries, isLoading: tsLoading } = useFinancialTimeSeries({
-    bank_name: 'Türkiye Bankacılık Sistemi',
-  });
-  const { data: regionMetrics } = useRegionMetrics();
-  const { data: regionPeriods } = useRegionPeriods();
-  const { data: finPeriods } = useFinancialPeriods();
-  const { data: ratioTypes } = useFinancialRatioTypes();
-
   const [selectedMetric, setSelectedMetric] = useState<string>('');
   const [selectedYear, setSelectedYear] = useState<number>(0);
   const [ldrYear, setLdrYear] = useState<number>(0);
@@ -42,6 +31,21 @@ const Dashboard: React.FC = () => {
   const [ratioYear, setRatioYear] = useState<number>(0);
   const [ratioMonth, setRatioMonth] = useState<number>(0);
   const [selectedRatio, setSelectedRatio] = useState<string>('ROA');
+  const [accountingSystem, setAccountingSystem] = useState<string | undefined>(undefined);
+
+  const { data: banks, isLoading: banksLoading } = useBanks();
+  const { data: dashStats, isLoading: dashStatsLoading } = useBankDashboardStats();
+  const { data: summary, isLoading: summaryLoading } = useFinancialSummary({
+    ...(accountingSystem ? { accounting_system: accountingSystem } : {}),
+  });
+  const { data: timeSeries, isLoading: tsLoading } = useFinancialTimeSeries({
+    bank_name: 'Türkiye Bankacılık Sistemi',
+    ...(accountingSystem ? { accounting_system: accountingSystem } : {}),
+  });
+  const { data: regionMetrics } = useRegionMetrics();
+  const { data: regionPeriods } = useRegionPeriods();
+  const { data: finPeriods } = useFinancialPeriods();
+  const { data: ratioTypes } = useFinancialRatioTypes();
 
   // Set default metric/year when data loads
   React.useEffect(() => {
@@ -76,7 +80,7 @@ const Dashboard: React.FC = () => {
 
   const { data: ldrData, isLoading: ldrLoading } = useLoanDepositRatio(ldrYear);
   const { data: hhiData, isLoading: hhiLoading } = useCreditHhi(hhiYear);
-  const { data: ratioData, isLoading: ratioLoading } = useFinancialRatios(ratioYear, ratioMonth);
+  const { data: ratioData, isLoading: ratioLoading } = useFinancialRatios(ratioYear, ratioMonth, accountingSystem);
 
   // Top 20 regions by LDR for chart readability
   const ldrChartData = useMemo(() => {
@@ -164,7 +168,20 @@ const Dashboard: React.FC = () => {
 
   return (
     <div>
-      <h2>Turkiye Bankacilik Sektoru Dashboard</h2>
+      <Space style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <h2 style={{ margin: 0 }}>Turkiye Bankacilik Sektoru Dashboard</h2>
+        <Select
+          placeholder="Muhasebe Sistemi"
+          allowClear
+          value={accountingSystem}
+          onChange={setAccountingSystem}
+          style={{ width: 180 }}
+          options={[
+            { value: 'SOLO', label: 'Solo' },
+            { value: 'KONSOLİDE', label: 'Konsolide' },
+          ]}
+        />
+      </Space>
 
       {/* Row 1: KPI Cards */}
       <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>

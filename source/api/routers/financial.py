@@ -34,11 +34,15 @@ async def list_statements(
 async def summary(
     year: int | None = Query(None),
     metric: str | None = Query(None),
+    accounting_system: str | None = Query(None),
     redis=Depends(get_redis_client),
 ):
     ch = get_ch()
     try:
-        return await financial_service.get_summary(ch, redis, year=year, metric=metric)
+        return await financial_service.get_summary(
+            ch, redis, year=year, metric=metric,
+            accounting_system=accounting_system,
+        )
     finally:
         ch.disconnect()
 
@@ -91,11 +95,15 @@ async def ratio_types():
 async def ratios(
     year: int = Query(...),
     month: int = Query(...),
+    accounting_system: str | None = Query(None),
     redis=Depends(get_redis_client),
 ):
     ch = get_ch()
     try:
-        return await financial_service.get_financial_ratios(ch, redis, year=year, month=month)
+        return await financial_service.get_financial_ratios(
+            ch, redis, year=year, month=month,
+            accounting_system=accounting_system,
+        )
     finally:
         ch.disconnect()
 
@@ -106,6 +114,7 @@ async def time_series(
     statement: str | None = Query(None),
     from_year: int | None = Query(None),
     to_year: int | None = Query(None),
+    accounting_system: str | None = Query(None),
     redis=Depends(get_redis_client),
 ):
     ch = get_ch()
@@ -113,6 +122,7 @@ async def time_series(
         return await financial_service.get_time_series(
             ch, redis, bank_name=bank_name, statement=statement,
             from_year=from_year, to_year=to_year,
+            accounting_system=accounting_system,
         )
     finally:
         ch.disconnect()

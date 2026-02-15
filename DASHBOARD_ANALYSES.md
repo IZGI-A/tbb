@@ -14,6 +14,18 @@ Bu dokuman, TBB (Turkiye Bankalar Birligi) Dashboard sayfasinda yer alan tum gra
 - **Backend**: FastAPI (async) + ClickHouse driver + asyncpg
 - **Frontend**: React + TypeScript + Ant Design + ECharts (echarts-for-react) + TanStack Query
 
+### Muhasebe Sistemi Filtresi (Solo / Konsolide)
+
+Dashboard'in sag ust kosesinde global bir **Muhasebe Sistemi** secici yer alir. Bu filtre ClickHouse `tbb.financial_statements` tablosundaki `accounting_system` alanina gore verileri filtreler:
+
+| Secenek | Aciklama | DB Eslesmesi (LIKE) |
+|---------|----------|---------------------|
+| **Solo** | Banka bazinda bireysel mali tablolar | `%SOLO%` → TFRS9-SOLO-BANKALARCA KAMUYA ACIKLANACAK... |
+| **Konsolide** | Banka + bagli ortaklik konsolide mali tablolar | `%KONSOLİDE%` → TFRS9-KONSOLİDE-BANKALARCA KAMUYA ACIKLANACAK... |
+| *(Bos)* | Tum muhasebe sistemleri (varsayilan) | Filtre uygulanmaz |
+
+**Etkilenen bolumler**: Toplam Aktifler KPI (1.4), Finansal Oran Analizi (6), Sektor Toplam Trend (8). Diger bolumler (banka bilgileri, sube/ATM, bolgesel analizler) finansal tablolardan bagimsiz oldugu icin etkilenmez.
+
 ---
 
 ## 1. KPI Kartlari
@@ -56,10 +68,11 @@ Dashboard'in en ust satirinda 4 adet ozet istatistik karti yer alir.
 |---------|-------|
 | **Grafik Turu** | Statistic (sayi karti, formatli) |
 | **Veri Kaynagi** | ClickHouse `tbb.financial_statements` tablosu |
-| **API Endpoint** | `GET /api/financial/summary` |
-| **SQL Sorgusu** | `SELECT main_statement, sum(amount_total) as total, count() as cnt FROM tbb.financial_statements FINAL GROUP BY main_statement ORDER BY total DESC` |
+| **API Endpoint** | `GET /api/financial/summary?accounting_system={SOLO\|KONSOLİDE}` |
+| **SQL Sorgusu** | `SELECT main_statement, sum(amount_total) as total, count() as cnt FROM tbb.financial_statements FINAL [WHERE accounting_system LIKE '%{sistem}%'] GROUP BY main_statement ORDER BY total DESC` |
 | **Hesaplama** | `main_statement` alanlari icinde "aktif" veya "varlik" iceren kaydin `total` degeri |
 | **Format** | T TL (trilyon), B TL (milyar), M TL (milyon) biciminde kisaltilir |
+| **Solo/Konsolide** | Global muhasebe sistemi filtresinden etkilenir |
 | **Aciklama** | Turkiye bankacilik sektorunun toplam aktif buyuklugu |
 
 ---
@@ -269,8 +282,9 @@ Banka bazinda 6 temel finansal oranin karsilastirmali analizi.
 |---------|-------|
 | **Grafik Turu** | Yatay bar grafik (ECharts Bar, horizontal) |
 | **Veri Kaynagi** | ClickHouse `tbb.financial_statements` tablosu |
-| **API Endpoint** | `GET /api/financial/ratios?year={year}&month={month}` |
+| **API Endpoint** | `GET /api/financial/ratios?year={year}&month={month}&accounting_system={SOLO\|KONSOLİDE}` |
 | **Filtreler** | Donem (yil/ay) secici + Oran turu secici dropdown |
+| **Solo/Konsolide** | Global muhasebe sistemi filtresinden etkilenir |
 
 ### Genel Hesaplama Yaklasimi
 
@@ -297,6 +311,7 @@ SELECT
         AND child_statement='XVII. YUKUMLULUKLER TOPLAMI') AS liabilities_fc
 FROM tbb.financial_statements FINAL
 WHERE year_id = {year} AND month_id = {month}
+  AND accounting_system LIKE '%{sistem}%'   -- Solo/Konsolide filtresi (bos ise '%')
   AND bank_name NOT IN (aggregate_kategoriler)
 GROUP BY bank_name
 HAVING total_assets > 0
@@ -448,7 +463,8 @@ Turkiye bankacilik sektorunun zaman icerisindeki buyume trendini gosterir.
 |---------|-------|
 | **Grafik Turu** | Cizgi grafik (ECharts Line) |
 | **Veri Kaynagi** | ClickHouse `tbb.financial_statements` tablosu |
-| **API Endpoint** | `GET /api/financial/time-series?bank_name=Turkiye+Bankacilik+Sistemi` |
+| **API Endpoint** | `GET /api/financial/time-series?bank_name=Turkiye+Bankacilik+Sistemi&accounting_system={SOLO\|KONSOLİDE}` |
+| **Solo/Konsolide** | Global muhasebe sistemi filtresinden etkilenir |
 
 ### SQL Sorgusu
 
@@ -456,6 +472,7 @@ Turkiye bankacilik sektorunun zaman icerisindeki buyume trendini gosterir.
 SELECT year_id, month_id, sum(amount_total) as amount_total
 FROM tbb.financial_statements FINAL
 WHERE bank_name = 'Turkiye Bankacilik Sistemi'
+  [AND accounting_system LIKE '%{sistem}%']   -- Solo/Konsolide filtresi
 GROUP BY year_id, month_id
 ORDER BY year_id, month_id
 ```
@@ -466,6 +483,7 @@ ORDER BY year_id, month_id
 - "Turkiye Bankacilik Sistemi" adli aggregate kayit kullanilir
 - Tum main_statement'larin amount_total degerleri toplanir
 - Sektorun genel buyume/kuculme trendini gosterir
+- Solo secildiginde sadece solo mali tablolardan, Konsolide secildiginde konsolide tablolardan trend gosterilir
 
 ---
 
