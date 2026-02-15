@@ -18,7 +18,7 @@ CREATE TABLE IF NOT EXISTS bank_info (
 
 CREATE TABLE IF NOT EXISTS branch_info (
     bank_name VARCHAR(200),
-    branch_name VARCHAR(200) PRIMARY KEY,
+    branch_name VARCHAR(200),
     address TEXT,
     district VARCHAR(150),
     city VARCHAR(150),
@@ -26,6 +26,7 @@ CREATE TABLE IF NOT EXISTS branch_info (
     fax VARCHAR(100),
     opening_date DATE,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (bank_name, branch_name),
     FOREIGN KEY (bank_name) REFERENCES bank_info(bank_name) ON DELETE CASCADE
 );
 

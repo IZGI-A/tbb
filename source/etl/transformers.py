@@ -38,6 +38,20 @@ def _safe_int(value: Any) -> int | None:
         return None
 
 
+def _parse_date(text: Any) -> str | None:
+    """Parse Turkish date formats (dd.mm.yyyy, dd/mm/yyyy) to ISO yyyy-mm-dd."""
+    if text is None or text == "" or text == "-":
+        return None
+    s = str(text).strip()
+    for sep in (".", "/", "-"):
+        parts = s.split(sep)
+        if len(parts) == 3:
+            d, m, y = parts[0].strip(), parts[1].strip(), parts[2].strip()
+            if d.isdigit() and m.isdigit() and y.isdigit() and len(y) == 4:
+                return f"{y}-{m.zfill(2)}-{d.zfill(2)}"
+    return None
+
+
 def _first_of(*keys, record: dict, default: Any = "") -> Any:
     """Return the first non-empty value found for the given keys in *record*."""
     for k in keys:
@@ -180,12 +194,37 @@ def transform_risk_center(raw_records: list[dict]) -> list[dict]:
     return rows
 
 
+def _transform_branch_row(row: dict, fallback_bank: str = "") -> dict:
+    """Map a scraped branch/ATM row to DB-ready dict."""
+    bank_name = _first_of(
+        "Banka", "Banka Adı", "col_0",
+        record=row,
+    ) or fallback_bank
+    return {
+        "bank_name": bank_name,
+        "branch_name": _first_of(
+            "Şube Adı", "Şube", "Sube Adi", "Sube", "col_1",
+            record=row,
+        ),
+        "address": _first_of("Adres", "col_2", record=row),
+        "district": _first_of("İlçe", "Ilce", "col_3", record=row),
+        "city": _first_of("Şehir", "İl", "Il", "col_4", record=row),
+        "phone": _first_of("Telefon", "col_5", record=row),
+        "fax": _first_of("Faks", "Fax", "col_6", record=row),
+        "opening_date": _parse_date(
+            _first_of(
+                "Açılış Tarihi", "Açılış", "Acilis Tarihi", "col_7",
+                record=row, default=None,
+            )
+        ),
+    }
+
+
 def transform_bank_info(raw_data: dict) -> dict[str, list[dict]]:
     """Transform scraped bank data into PostgreSQL-ready dicts.
 
-    NOTE: The bank info page has been removed from TBB verisistemi.
-    This function is kept for backwards compatibility but will receive
-    empty input from the disabled BankInfoScraper.
+    Handles the flat format from the new tbb.org.tr scraper:
+      {"banks": [...], "branches": [...], "atms": [...]}
     """
     result: dict[str, list[dict]] = {
         "bank_info": [],
@@ -194,61 +233,42 @@ def transform_bank_info(raw_data: dict) -> dict[str, list[dict]]:
         "historical_events": [],
     }
 
-    banks = raw_data.get("banks", [])
-    details = raw_data.get("details", [])
-
-    for bank in banks:
+    # --- Bank list ---
+    for bank in raw_data.get("banks", []):
         result["bank_info"].append({
-            "bank_group": bank.get("Grup", bank.get("col_0", "")),
-            "sub_bank_group": bank.get("Alt Grup", bank.get("col_1", "")),
-            "bank_name": bank.get("Banka Adı", bank.get("Banka", bank.get("col_2", ""))),
-            "address": bank.get("Adres", bank.get("col_3", "")),
-            "board_president": bank.get("YK Başkanı", bank.get("col_4", "")),
-            "general_manager": bank.get("Genel Müdür", bank.get("col_5", "")),
-            "phone_fax": bank.get("Telefon/Fax", bank.get("col_6", "")),
-            "web_kep_address": bank.get("Web/KEP", bank.get("col_7", "")),
-            "eft": bank.get("EFT", bank.get("col_8", "")),
-            "swift": bank.get("SWIFT", bank.get("col_9", "")),
+            "bank_group": _first_of(
+                "bank_group", "Grup", "col_0", record=bank,
+            ),
+            "sub_bank_group": _first_of(
+                "sub_bank_group", "Alt Grup", "col_1", record=bank,
+            ),
+            "bank_name": _first_of(
+                "Banka Adı", "Banka", "col_2", record=bank,
+            ),
+            "address": _first_of("Adres", "col_3", record=bank),
+            "board_president": _first_of(
+                "Y.K. Başkanı", "YK Başkanı", "YK Baskani", "col_4",
+                record=bank,
+            ),
+            "general_manager": _first_of(
+                "Genel Müdür", "Genel Mudur", "col_5", record=bank,
+            ),
+            "phone_fax": _first_of("Telefon/Fax", "col_6", record=bank),
+            "web_kep_address": _first_of(
+                "Web Adresi/KEP Adresleri", "Web/KEP", "col_7",
+                record=bank,
+            ),
+            "eft": _first_of("Eft", "EFT", "col_8", record=bank),
+            "swift": _first_of("Swift", "SWIFT", "col_9", record=bank),
         })
 
-    for detail in details:
-        bank_row = detail.get("_bank_row", {})
-        bank_name = bank_row.get("Banka Adı", bank_row.get("Banka", bank_row.get("col_2", "")))
-        info = detail.get("info", {})
+    # --- Branches (flat list, each row has bank_name) ---
+    for row in raw_data.get("branches", []):
+        result["branch_info"].append(_transform_branch_row(row))
 
-        for branch in detail.get("branches", []):
-            result["branch_info"].append({
-                "bank_name": bank_name,
-                "branch_name": branch.get("Şube Adı", branch.get("Sube", branch.get("col_0", ""))),
-                "address": branch.get("Adres", branch.get("col_1", "")),
-                "district": branch.get("İlçe", branch.get("Ilce", branch.get("col_2", ""))),
-                "city": branch.get("İl", branch.get("Il", branch.get("col_3", ""))),
-                "phone": branch.get("Telefon", branch.get("col_4", "")),
-                "fax": branch.get("Fax", branch.get("col_5", "")),
-                "opening_date": branch.get("Açılış Tarihi", branch.get("col_6")),
-            })
-
-        for atm in detail.get("atms", []):
-            result["atm_info"].append({
-                "bank_name": bank_name,
-                "branch_name": atm.get("Şube Adı", atm.get("col_0", "")),
-                "address": atm.get("Adres", atm.get("col_1", "")),
-                "district": atm.get("İlçe", atm.get("col_2", "")),
-                "city": atm.get("İl", atm.get("col_3", "")),
-                "phone": atm.get("Telefon", atm.get("col_4", "")),
-                "fax": atm.get("Fax", atm.get("col_5", "")),
-                "opening_date": atm.get("Açılış Tarihi", atm.get("col_6")),
-            })
-
-        history = detail.get("history", {})
-        history_text = history.get("text", "")
-        if history_text or info:
-            founding = info.get("Kuruluş Tarihi", info.get("Kurulus Tarihi"))
-            result["historical_events"].append({
-                "bank_name": bank_name,
-                "founding_date": founding,
-                "historical_event": history_text or info.get("Tarihçe", ""),
-            })
+    # --- ATMs (flat list, each row has bank_name) ---
+    for row in raw_data.get("atms", []):
+        result["atm_info"].append(_transform_branch_row(row))
 
     logger.info(
         "Transformed bank info: %d banks, %d branches, %d ATMs, %d history records",
