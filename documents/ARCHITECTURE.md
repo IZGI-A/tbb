@@ -421,6 +421,20 @@ Tum tablolar **ReplacingMergeTree** motoru kullanir. Ayni kayit tekrar yuklendig
 
 ### Onbellekleme Stratejisi (Redis)
 
+**Redis neden kullaniliyor?**
+
+FastAPI her istekte ClickHouse ve PostgreSQL'e sorgu atar. Ancak TBB verileri anlik degismez;
+finansal tablolar ceyreklik, bolgesel istatistikler aylik, banka bilgileri ise yilda birkac kez
+guncellenir. Ayni sorguyu her istek icin tekrar calistirmak gereksiz veritabani yuku olusturur
+ve yanit suresini arttirir. Redis, sik tekrarlanan sorgu sonuclarini bellekte tutarak:
+
+- **Yanit suresini dusurur**: Veritabani sorgulari ~50-200 ms → Redis okuma ~1-2 ms
+- **Veritabani yukunu azaltir**: Ayni sorgu binlerce kez yerine sadece TTL dolunca calisir
+- **Olceklenebilirlik saglar**: Es zamanli kullanici sayisi artsa bile veritabani darbogazina yol acmaz
+
+Her servis fonksiyonu once Redis'te cache key'i arar; varsa dogrudan dondurur, yoksa
+veritabanindan ceker ve sonucu TTL suresiyle Redis'e yazar.
+
 | Veri Turu | TTL | Cache Key Ornegi | Aciklama |
 |-----------|-----|------------------|----------|
 | Finansal veriler | 1 saat | `fin:ratios:2025:9:SOLO` | Ceyreklik guncellenir |
