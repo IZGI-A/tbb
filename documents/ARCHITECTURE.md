@@ -664,15 +664,24 @@ Bu sorunu onlemek icin otomatik bellek yapilandirma scripti sunulur.
 
 ### Otomatik Yapilandirma
 
+`start.sh` scripti makinenin donanim ozelliklerini algilar ve tum sistemi otomatik baslatir:
+
 ```bash
-pip install -r scripts/requirements.txt
-python scripts/configure_resources.py --dry-run   # Onizleme
-python scripts/configure_resources.py              # docker-compose.yml'e yaz
-docker compose up -d                               # Uygula
+./start.sh              # Varsayilan: toplam RAM'in %80'i
+./start.sh 8g           # Sabit RAM: 8 GB
+./start.sh 60%          # Toplam RAM'in %60'i
 ```
 
-Script toplam RAM degil, **kullanilabilir RAM**'i (toplam - OS - calisan uygulamalar) baz alir.
-Bu sayede gelistirici makinesinde calisan diger uygulamalar etkilenmez.
+Arka planda `scripts/configure_resources.py` calisir. Manuel kullanim:
+
+```bash
+python3 scripts/configure_resources.py --ram 70% --dry-run  # Onizleme
+python3 scripts/configure_resources.py --ram 70%            # Uygula
+docker compose up -d
+```
+
+RAM belirtilmezse kullanilabilir RAM otomatik tespit edilir.
+Remote sunucularda `--ram 70%` onerilen varsayilandir (start.sh bunu kullanir).
 
 | Servis | Kullanilabilir RAM'in Payi | Minimum |
 |--------|---------------------------|---------|
@@ -768,6 +777,7 @@ tbb/
 ├── scripts/
 │   ├── configure_resources.py     # Bellek otomatik yapilandirma
 │   └── requirements.txt           # Script bagimliliklari (psutil, ruamel.yaml)
+├── start.sh                       # Tek komutla otomatik kurulum ve baslatma
 ├── ARCHITECTURE.md
 ├── ENDPOINTS.md
 └── DASHBOARD_ANALYSES.md

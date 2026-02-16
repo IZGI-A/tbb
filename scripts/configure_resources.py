@@ -3,12 +3,15 @@
 Auto-configure Docker Compose memory limits based on host hardware.
 
 Usage:
-    python scripts/configure_resources.py            # Apply changes
-    python scripts/configure_resources.py --dry-run  # Preview only
+    python scripts/configure_resources.py                    # Auto-detect available RAM
+    python scripts/configure_resources.py --ram 8g        # Allocate from 8 GB ram
+    python scripts/configure_resources.py --ram 70%       # Use 70% of total RAM
+    python scripts/configure_resources.py --dry-run          # Preview only
 """
 
 import argparse
 import math
+import re
 import sys
 from pathlib import Path
 
@@ -24,8 +27,7 @@ except ImportError:
 
 COMPOSE_FILE = Path(__file__).resolve().parent.parent / "docker-compose.yml"
 
-# Allocation ratios (fraction of AVAILABLE RAM, not total)
-# Available RAM = total - (OS + running apps)
+# Allocation ratios (fraction of ram)
 ALLOCATIONS = {
     "postgres": 0.18,
     "clickhouse": 0.30,
@@ -35,7 +37,7 @@ ALLOCATIONS = {
     "fastapi": 0.10,
     "frontend": 0.04,
 }
-# Total: ~95% of available RAM, remaining %5 headroom
+# Total: ~95% of ram, remaining %5 headroom
 
 # Minimum limits per service (MB)
 MINIMUMS = {
@@ -49,13 +51,36 @@ MINIMUMS = {
 }
 
 
-def compute_limits(available_bytes: int) -> dict[str, int]:
-    """Return memory limits in MB per service based on available RAM."""
-    available_mb = available_bytes / (1024 ** 2)
+def parse_ram(ram_str: str, total_bytes: int) -> int:
+    """Parse ram string like '8g', '4096m', '70%' into bytes."""
+    ram_str = ram_str.strip().lower()
+
+    # Percentage of total RAM
+    if ram_str.endswith("%"):
+        pct = float(ram_str[:-1])
+        if not 0 < pct <= 100:
+            sys.exit(f"Invalid percentage: {ram_str} (must be 1-100)")
+        return int(total_bytes * pct / 100)
+
+    # Absolute value with unit
+    match = re.match(r"^(\d+(?:\.\d+)?)\s*(g|gb|m|mb)$", ram_str)
+    if not match:
+        sys.exit(f"Invalid ram format: '{ram_str}'. Examples: 8g, 4096m, 70%")
+
+    value = float(match.group(1))
+    unit = match.group(2)
+    if unit.startswith("g"):
+        return int(value * 1024 ** 3)
+    return int(value * 1024 ** 2)
+
+
+def compute_limits(ram_bytes: int) -> dict[str, int]:
+    """Return memory limits in MB per service based on ram."""
+    ram_mb = ram_bytes / (1024 ** 2)
 
     limits = {}
     for svc, ratio in ALLOCATIONS.items():
-        mb = max(MINIMUMS[svc], int(available_mb * ratio))
+        mb = max(MINIMUMS[svc], int(ram_mb * ratio))
         # Round to nearest 64MB for cleaner values
         mb = int(math.ceil(mb / 64) * 64)
         limits[svc] = mb
@@ -109,20 +134,32 @@ def apply_limits(compose: dict, limits: dict[str, int]) -> None:
 
 def main():
     parser = argparse.ArgumentParser(description="Auto-configure Docker Compose memory limits")
+    parser.add_argument("--ram", type=str, default=None,
+                        help="RAM ram for Docker: absolute (8g, 4096m) or percentage (70%%)")
     parser.add_argument("--dry-run", action="store_true", help="Preview without writing")
     args = parser.parse_args()
 
     mem = psutil.virtual_memory()
     total_gb = mem.total / (1024 ** 3)
-    available_gb = mem.available / (1024 ** 3)
-    used_gb = total_gb - available_gb
 
-    print(f"Total RAM     : {total_gb:.1f} GB")
-    print(f"Used (OS+apps): {used_gb:.1f} GB")
-    print(f"Available     : {available_gb:.1f} GB")
+    if args.ram:
+        ram_bytes = parse_ram(args.ram, mem.total)
+        ram_gb = ram_bytes / (1024 ** 3)
+        print(f"Total RAM : {total_gb:.1f} GB")
+        print(f"RAM       : {ram_gb:.1f} GB ({args.ram})")
+    else:
+        ram_bytes = mem.available
+        ram_gb = ram_bytes / (1024 ** 3)
+        used_gb = total_gb - ram_gb
+        print(f"Total RAM     : {total_gb:.1f} GB")
+        print(f"Used (OS+apps): {used_gb:.1f} GB")
+        print(f"Available     : {ram_gb:.1f} GB (auto-detected)")
+        print()
+        print("Tip: Use --ram to set a fixed ram (e.g., --ram 8g, --ram 70%)")
+
     print()
 
-    limits = compute_limits(mem.available)
+    limits = compute_limits(ram_bytes)
 
     print(f"{'Service':<22} {'Limit':>8}")
     print("-" * 32)
@@ -131,12 +168,14 @@ def main():
         print(f"  {svc:<20} {format_memory(mb):>8}")
         total_alloc += mb
     print("-" * 32)
-    print(f"  {'Docker total':<20} {format_memory(total_alloc):>8}  ({total_alloc / 1024:.1f} GB / {available_gb:.1f} GB available)")
+    print(f"  {'Docker total':<20} {format_memory(total_alloc):>8}  ({total_alloc / 1024:.1f} GB / {ram_gb:.1f} GB ram)")
     print()
 
-    if total_alloc / 1024 > available_gb * 0.95:
-        print("WARNING: Allocation exceeds available RAM. Some services may be OOM-killed.")
+    if total_alloc / 1024 > total_gb:
+        print("ERROR: Allocation exceeds total system RAM!")
         print()
+        if not args.dry_run:
+            sys.exit(1)
 
     if args.dry_run:
         print("[dry-run] No changes written.")
