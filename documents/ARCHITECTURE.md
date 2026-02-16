@@ -10,30 +10,30 @@ Sistem yukaridan asagiya tek bir dikey akis seklinde okunur.
 
 ```
                     ┌─────────────────────────┐
-                    │    TBB Web Siteleri      │
-                    │    tbb.org.tr            │
-                    │    verisistemi.tbb.org   │
+                    │    TBB Web Siteleri     │
+                    │    tbb.org.tr           │
+                    │    verisistemi.tbb.org  │
                     └────────────┬────────────┘
                                  │
                                  │  Selenium (Headless Chrome)
                                  v
                     ┌─────────────────────────┐
-                    │    Airflow Scheduler     │
-                    │    :8080                 │
+                    │    Airflow Scheduler    │
+                    │    :8080                │
                     │                         │
-                    │    4 Scraper:            │
-                    │    - Financial (haftalik)│
-                    │    - BankInfo  (aylik)   │
-                    │    - Region   (aylik)    │
-                    │    - RiskCenter(aylik)   │
+                    │   4 Scraper:            │
+                    │   - Financial (haftalik)│
+                    │   - BankInfo  (aylik)   │
+                    │   - Region   (aylik)    │
+                    │   - RiskCenter(aylik)   │
                     └────────────┬────────────┘
                                  │
                                  │  JSON → Transform → Load
                                  v
               ┌──────────────────────────────────────┐
-              │           VERITABANLARI               │
+              │           VERITABANLARI              │
               │                                      │
-              │   PostgreSQL :5432    ClickHouse :9000│
+              │   PostgreSQL :5432   ClickHouse :9000│
               │   ┌──────────────┐   ┌─────────────┐ │
               │   │ bank_info    │   │ financial_  │ │
               │   │ branch_info  │   │  statements │ │
@@ -46,30 +46,30 @@ Sistem yukaridan asagiya tek bir dikey akis seklinde okunur.
                                  │  read
                                  v
                     ┌─────────────────────────┐
-                    │    FastAPI  :8000        │
-                    │    27 REST endpoint      │
+                    │    FastAPI  :8000       │
+                    │    27 REST endpoint     │
                     │                         │
-                    │    Redis :6379 (cache)   │
+                    │    Redis :6379 (cache)  │
                     └────────────┬────────────┘
                                  │
                                  │  /api/* proxy
                                  v
                     ┌─────────────────────────┐
-                    │    Nginx + React SPA     │
-                    │    :3000                 │
+                    │    Nginx + React SPA    │
+                    │    :3000                │
                     │                         │
-                    │    5 Sayfa:              │
-                    │    - Dashboard           │
-                    │    - Mali Tablolar       │
-                    │    - Bolgesel Ist.       │
-                    │    - Risk Merkezi        │
-                    │    - Banka Rehberi       │
+                    │    5 Sayfa:             │
+                    │    - Dashboard          │
+                    │    - Mali Tablolar      │
+                    │    - Bolgesel Ist.      │
+                    │    - Risk Merkezi       │
+                    │    - Banka Rehberi      │
                     └────────────┬────────────┘
                                  │
                                  v
                     ┌─────────────────────────┐
-                    │      Kullanici           │
-                    │      (Web Tarayici)      │
+                    │      Kullanici          │
+                    │      (Web Tarayici)     │
                     └─────────────────────────┘
 ```
 
@@ -80,9 +80,9 @@ Sistem yukaridan asagiya tek bir dikey akis seklinde okunur.
 7 container, Docker Compose ile orkestre edilir.
 
 ```
-  ┌─────────────────────── ALTYAPI ───────────────────────┐
+  ┌─────────────────────── ALTYAPI ────────────────────────┐
   │                                                        │
-  │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐ │
+  │  ┌───────────────┐  ┌──────────────┐  ┌──────────────┐ │
   │  │  PostgreSQL   │  │  ClickHouse  │  │    Redis     │ │
   │  │  :5432        │  │  :9000/:8123 │  │    :6379     │ │
   │  │  postgres:16  │  │  ch:24.1     │  │  redis:7     │ │
@@ -115,7 +115,7 @@ Sistem yukaridan asagiya tek bir dikey akis seklinde okunur.
 | **fastapi** | Custom (Python 3.12-slim) | 8000 | REST API sunucusu |
 | **frontend** | Custom (Node 20 build + Nginx) | 3000 | Web arayuzu (SPA) |
 
-### Volume'lar (Kalici Depolama)
+### Volume'lar
 - `postgres-data`: PostgreSQL veritabani dosyalari
 - `clickhouse-data`: ClickHouse veritabani dosyalari
 - `redis-data`: Redis snapshot dosyalari
@@ -266,32 +266,32 @@ Ortak ozellikler:
 
 ```
   ┌────────────────────────────────────────────────┐
-  │                  bank_info                      │
+  │                  bank_info                     │
   │  PK: bank_name                                 │
-  │──────────────────────────────────────────────── │
-  │  bank_group          VARCHAR(150)               │
-  │  sub_bank_group      VARCHAR(150)               │
-  │  bank_name           VARCHAR(200)  PK           │
-  │  address             TEXT                       │
-  │  board_president     VARCHAR(150)               │
-  │  general_manager     VARCHAR(150)               │
-  │  phone_fax           VARCHAR(100)               │
-  │  web_kep_address     VARCHAR(250)               │
-  │  eft                 VARCHAR(50)                │
-  │  swift               VARCHAR(50)                │
-  │  updated_at          TIMESTAMP                  │
-  └──────┬──────────────────┬──────────────┬────────┘
-         |                  |              |
-         | FK (CASCADE)     | FK           | FK
-         v                  v              v
-  ┌──────────────┐  ┌──────────────┐  ┌──────────────────┐
-  │ branch_info  │  │   atm_info   │  │ historical_events│
-  │              │  │              │  │                  │
-  │ PK: bank_name│  │ PK: bank_name│  │ PK: bank_name   │
-  │   + branch_  │  │   + branch_  │  │                  │
-  │     name     │  │     name     │  │ founding_date    │
-  │              │  │   + address  │  │ historical_event │
-  │ address      │  │              │  └──────────────────┘
+  │────────────────────────────────────────────────│
+  │  bank_group          VARCHAR(150)              │
+  │  sub_bank_group      VARCHAR(150)              │
+  │  bank_name           VARCHAR(200)  PK          │
+  │  address             TEXT                      │
+  │  board_president     VARCHAR(150)              │
+  │  general_manager     VARCHAR(150)              │
+  │  phone_fax           VARCHAR(100)              │
+  │  web_kep_address     VARCHAR(250)              │
+  │  eft                 VARCHAR(50)               │
+  │  swift               VARCHAR(50)               │
+  │  updated_at          TIMESTAMP                 │
+  └──────┬──────────────────┬──────────────────────┘
+         |                  |           
+         | FK (CASCADE)     | FK           
+         v                  v           
+  ┌──────────────┐  ┌──────────────┐  
+  │ branch_info  │  │   atm_info   │  
+  │              │  │              │  
+  │ PK: bank_name│  │ PK: bank_name│ 
+  │   + branch_  │  │   + branch_  │  
+  │     name     │  │     name     │  
+  │              │  │   + address  │  
+  │ address      │  │              │  
   │ district     │  │ district     │
   │ city  [IDX]  │  │ city  [IDX]  │
   │ phone, fax   │  │ phone, fax   │
@@ -408,15 +408,15 @@ Tum tablolar **ReplacingMergeTree** motoru kullanir. Ayni kayit tekrar yuklendig
   │  - get_time_series   - get_comparison               - get_ │
   │  - get_periods       - get_metrics                 branches│
   │  + 4 daha            + 2 daha                      + 3 daha│
-  └────┬────────────┬────────────┬────────────────────┬────────┘
-       |            |            |                    |
-       v            v            v                    v
-  ┌────────┐  ┌──────────┐  ┌───────────┐     ┌──────────┐
-  │ Redis  │  │ClickHouse│  │ ClickHouse│     │PostgreSQL│
-  │ Cache  │  │ (Finansal,│  │           │     │ (Banka   │
-  │        │  │  Bolgesel,│  │           │     │  Bilgi)  │
-  │        │  │  Risk)    │  │           │     │          │
-  └────────┘  └──────────┘  └───────────┘     └──────────┘
+  └────┬────────────┬─────────────────────────────────┬────────┘
+       |            |                                 |
+       v            v                                 v
+  ┌────────┐  ┌──────────┐                    ┌──────────┐
+  │ Redis  │  │ClickHouse│                    │PostgreSQL│
+  │ Cache  │  │ (Finansal,│                   │ (Banka   │
+  │        │  │  Bolgesel,│                   │  Bilgi)  │
+  │        │  │  Risk)    │                   │          │
+  └────────┘  └──────────┘                    └──────────┘
 ```
 
 ### Onbellekleme Stratejisi (Redis)
