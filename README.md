@@ -45,7 +45,20 @@ Fernet key uretmek icin:
 python3 -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
 ```
 
-### 3. Tum servisleri baslat
+### 3. Kaynak yapilandirmasi (opsiyonel)
+
+Bellek limitlerini sisteminize gore otomatik ayarlamak icin:
+
+```bash
+pip install -r scripts/requirements.txt
+python scripts/configure_resources.py --dry-run   # Onizleme
+python scripts/configure_resources.py              # Uygula
+```
+
+Script sisteminizin RAM miktarini tespit eder ve her servise uygun bellek limiti atar.
+Ayrica Redis `maxmemory` ve PostgreSQL `shared_buffers` degerlerini optimize eder.
+
+### 4. Tum servisleri baslat
 
 ```bash
 docker compose up -d --build
@@ -59,7 +72,7 @@ docker compose ps
 
 7 servisin tumu `running` (veya `healthy`) gorunmelidir.
 
-### 4. Servislerin hazir olmasini bekle
+### 5. Servislerin hazir olmasini bekle
 
 Veritabanlari saglik kontrolu gecene kadar diger servisler baslamaz. Loglardan takip:
 
@@ -184,6 +197,9 @@ tbb/
 │   ├── etl/                 # Transformer + Loader
 │   ├── config.py
 │   └── Dockerfile
+├── scripts/
+│   ├── configure_resources.py  # Bellek otomatik yapilandirma
+│   └── requirements.txt
 ├── .env.example
 ├── ARCHITECTURE.md          # Detayli sistem mimarisi
 ├── ENDPOINTS.md             # Tum API endpoint dokumantasyonu

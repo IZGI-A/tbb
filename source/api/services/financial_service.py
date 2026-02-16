@@ -1,11 +1,12 @@
 """Financial data service - queries ClickHouse."""
 
-import json
 import logging
 from decimal import Decimal
 
 import redis.asyncio as aioredis
 from clickhouse_driver import Client
+
+from db.cache import cache_get, cache_set
 
 logger = logging.getLogger(__name__)
 
@@ -29,9 +30,9 @@ async def get_statements(
     offset: int = 0,
 ) -> dict:
     cache_key = f"fin:stmts:{year}:{month}:{bank_name}:{accounting_system}:{main_statement}:{child_statement}:{limit}:{offset}"
-    cached = await redis.get(cache_key)
+    cached = await cache_get(redis, cache_key)
     if cached:
-        return json.loads(cached)
+        return cached
 
     conditions = []
     params = {}
@@ -78,7 +79,7 @@ async def get_statements(
     data = [_row_to_dict(r, columns) for r in rows]
 
     result = {"data": data, "total": total, "limit": limit, "offset": offset}
-    await redis.setex(cache_key, CACHE_TTL, json.dumps(result, default=str))
+    await cache_set(redis, cache_key, result, CACHE_TTL, default=str)
     return result
 
 
@@ -90,9 +91,9 @@ async def get_summary(
     accounting_system: str | None = None,
 ) -> list[dict]:
     cache_key = f"fin:summary:{year}:{metric}:{accounting_system}"
-    cached = await redis.get(cache_key)
+    cached = await cache_get(redis, cache_key)
     if cached:
-        return json.loads(cached)
+        return cached
 
     conditions = []
     params = {}
@@ -121,15 +122,15 @@ async def get_summary(
         for r in rows
     ]
 
-    await redis.setex(cache_key, CACHE_TTL, json.dumps(data, default=str))
+    await cache_set(redis, cache_key, data, CACHE_TTL, default=str)
     return data
 
 
 async def get_periods(ch: Client, redis: aioredis.Redis) -> list[dict]:
     cache_key = "fin:periods"
-    cached = await redis.get(cache_key)
+    cached = await cache_get(redis, cache_key)
     if cached:
-        return json.loads(cached)
+        return cached
 
     query = """
         SELECT DISTINCT year_id, month_id
@@ -139,35 +140,35 @@ async def get_periods(ch: Client, redis: aioredis.Redis) -> list[dict]:
     rows = ch.execute(query)
     data = [{"year_id": r[0], "month_id": r[1]} for r in rows]
 
-    await redis.setex(cache_key, CACHE_TTL, json.dumps(data))
+    await cache_set(redis, cache_key, data, CACHE_TTL)
     return data
 
 
 async def get_bank_names(ch: Client, redis: aioredis.Redis) -> list[str]:
     cache_key = "fin:bank_names"
-    cached = await redis.get(cache_key)
+    cached = await cache_get(redis, cache_key)
     if cached:
-        return json.loads(cached)
+        return cached
 
     query = "SELECT DISTINCT bank_name FROM tbb.financial_statements FINAL ORDER BY bank_name"
     rows = ch.execute(query)
     data = [r[0] for r in rows]
 
-    await redis.setex(cache_key, CACHE_TTL, json.dumps(data))
+    await cache_set(redis, cache_key, data, CACHE_TTL)
     return data
 
 
 async def get_main_statements(ch: Client, redis: aioredis.Redis) -> list[str]:
     cache_key = "fin:main_statements"
-    cached = await redis.get(cache_key)
+    cached = await cache_get(redis, cache_key)
     if cached:
-        return json.loads(cached)
+        return cached
 
     query = "SELECT DISTINCT main_statement FROM tbb.financial_statements FINAL ORDER BY main_statement"
     rows = ch.execute(query)
     data = [r[0] for r in rows if r[0]]
 
-    await redis.setex(cache_key, CACHE_TTL, json.dumps(data))
+    await cache_set(redis, cache_key, data, CACHE_TTL)
     return data
 
 
@@ -177,9 +178,9 @@ async def get_child_statements(
     main_statement: str | None = None,
 ) -> list[str]:
     cache_key = f"fin:child_statements:{main_statement}"
-    cached = await redis.get(cache_key)
+    cached = await cache_get(redis, cache_key)
     if cached:
-        return json.loads(cached)
+        return cached
 
     if main_statement:
         query = "SELECT DISTINCT child_statement FROM tbb.financial_statements FINAL WHERE main_statement = %(ms)s ORDER BY child_statement"
@@ -190,7 +191,7 @@ async def get_child_statements(
 
     data = [r[0] for r in rows if r[0]]
 
-    await redis.setex(cache_key, CACHE_TTL, json.dumps(data))
+    await cache_set(redis, cache_key, data, CACHE_TTL)
     return data
 
 
@@ -204,9 +205,9 @@ async def get_time_series(
     accounting_system: str | None = None,
 ) -> list[dict]:
     cache_key = f"fin:ts:{bank_name}:{statement}:{from_year}:{to_year}:{accounting_system}"
-    cached = await redis.get(cache_key)
+    cached = await cache_get(redis, cache_key)
     if cached:
-        return json.loads(cached)
+        return cached
 
     conditions = ["bank_name = %(bank_name)s"]
     params = {"bank_name": bank_name}
@@ -239,7 +240,7 @@ async def get_time_series(
         for r in rows
     ]
 
-    await redis.setex(cache_key, CACHE_TTL, json.dumps(data, default=str))
+    await cache_set(redis, cache_key, data, CACHE_TTL, default=str)
     return data
 
 
@@ -268,9 +269,9 @@ async def get_financial_ratios(
 ) -> list[dict]:
     """Compute key financial ratios per bank for a given period."""
     cache_key = f"fin:ratios:{year}:{month}:{accounting_system}"
-    cached = await redis.get(cache_key)
+    cached = await cache_get(redis, cache_key)
     if cached:
-        return json.loads(cached)
+        return cached
 
     query = """
         SELECT
@@ -344,5 +345,5 @@ async def get_financial_ratios(
             "FX_SHARE": fx_share,
         })
 
-    await redis.setex(cache_key, CACHE_TTL, json.dumps(data, default=str))
+    await cache_set(redis, cache_key, data, CACHE_TTL, default=str)
     return data
