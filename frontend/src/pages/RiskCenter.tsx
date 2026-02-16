@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Card, Select, Space, Table } from 'antd';
+import { Card, Col, Row, Select, Space, Table } from 'antd';
 import BarChart from '../components/charts/BarChart';
 import YearMonthFilter from '../components/filters/YearMonthFilter';
 import { useRiskCenterData, useRiskCenterReports, useRiskCenterPeriods, useRiskCenterCategories } from '../hooks/useRiskCenter';
@@ -58,16 +58,36 @@ const RiskCenter: React.FC = () => {
     { title: 'Ay', dataIndex: 'month_id', key: 'month_id', width: 60 },
   ];
 
-  // Group data by category for the chart
-  const chartData = (riskData ?? []).reduce((acc: Record<string, number>, r: RiskCenterRecord) => {
-    if (r.amount) {
-      acc[r.category] = (acc[r.category] ?? 0) + r.amount;
-    }
-    return acc;
-  }, {} as Record<string, number>);
+  // Detect which numeric fields have data
+  const records = (riskData ?? []) as RiskCenterRecord[];
+  const hasAmount = records.some(r => r.amount != null && r.amount !== 0);
+  const hasPersonCount = records.some(r => r.person_count != null && r.person_count !== 0);
+  const hasQuantity = records.some(r => r.quantity != null && r.quantity !== 0);
 
-  const chartCategories = Object.keys(chartData);
-  const chartValues = chartCategories.map(c => chartData[c]);
+  // Group data by category for the chart
+  const grouped: Record<string, { amount: number; person_count: number; quantity: number }> = {};
+  for (const r of records) {
+    if (!grouped[r.category]) {
+      grouped[r.category] = { amount: 0, person_count: 0, quantity: 0 };
+    }
+    grouped[r.category].amount += r.amount ?? 0;
+    grouped[r.category].person_count += r.person_count ?? 0;
+    grouped[r.category].quantity += r.quantity ?? 0;
+  }
+
+  const chartCategories = Object.keys(grouped);
+
+  // Build separate charts for each metric to avoid scale mismatch
+  const charts: { title: string; data: number[] }[] = [];
+  if (hasAmount) {
+    charts.push({ title: 'Tutar Dagilimi', data: chartCategories.map(c => grouped[c].amount) });
+  }
+  if (hasPersonCount) {
+    charts.push({ title: 'Kisi Sayisi Dagilimi', data: chartCategories.map(c => grouped[c].person_count) });
+  }
+  if (hasQuantity) {
+    charts.push({ title: 'Adet Dagilimi', data: chartCategories.map(c => grouped[c].quantity) });
+  }
 
   return (
     <div>
@@ -108,14 +128,20 @@ const RiskCenter: React.FC = () => {
         </Space>
       </Card>
 
-      {chartCategories.length > 0 && (
-        <Card style={{ marginBottom: 16 }}>
-          <BarChart
-            title="Kategorilere Gore Tutar Dagilimi"
-            xData={chartCategories}
-            series={[{ name: 'Tutar', data: chartValues }]}
-          />
-        </Card>
+      {chartCategories.length > 0 && charts.length > 0 && (
+        <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
+          {charts.map((chart) => (
+            <Col xs={24} md={charts.length === 1 ? 24 : 12} key={chart.title}>
+              <Card>
+                <BarChart
+                  title={chart.title}
+                  xData={chartCategories}
+                  series={[{ name: chart.title, data: chart.data }]}
+                />
+              </Card>
+            </Col>
+          ))}
+        </Row>
       )}
 
       <Table

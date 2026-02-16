@@ -11,9 +11,10 @@ interface BarChartProps {
   }[];
   loading?: boolean;
   horizontal?: boolean;
+  stacked?: boolean;
 }
 
-const BarChart: React.FC<BarChartProps> = ({ title, xData, series, loading, horizontal }) => {
+const BarChart: React.FC<BarChartProps> = ({ title, xData, series, loading, horizontal, stacked }) => {
   const categoryAxis = { type: 'category' as const, data: xData };
   const valueAxis = { type: 'value' as const };
 
@@ -28,6 +29,7 @@ const BarChart: React.FC<BarChartProps> = ({ title, xData, series, loading, hori
       name: s.name,
       type: 'bar' as const,
       data: s.data,
+      ...(stacked ? { stack: 'total' } : {}),
     })),
   };
 

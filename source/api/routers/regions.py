@@ -47,6 +47,30 @@ async def metrics(redis=Depends(get_redis_client)):
         ch.disconnect()
 
 
+@router.get("/credit-hhi")
+async def credit_hhi(
+    year: int = Query(...),
+    redis=Depends(get_redis_client),
+):
+    ch = get_ch()
+    try:
+        return await region_service.get_credit_hhi(ch, redis, year=year)
+    finally:
+        ch.disconnect()
+
+
+@router.get("/loan-deposit-ratio")
+async def loan_deposit_ratio(
+    year: int = Query(...),
+    redis=Depends(get_redis_client),
+):
+    ch = get_ch()
+    try:
+        return await region_service.get_loan_deposit_ratio(ch, redis, year=year)
+    finally:
+        ch.disconnect()
+
+
 @router.get("/comparison")
 async def comparison(
     metric: str = Query(...),

@@ -145,3 +145,37 @@ async def search_banks(
                 d[k] = v.isoformat()
 
     return data
+
+
+async def get_dashboard_stats(
+    pool: asyncpg.Pool,
+    redis: aioredis.Redis,
+) -> dict:
+    """Aggregated statistics for the main dashboard."""
+    cache_key = "banks:dashboard_stats"
+    cached = await redis.get(cache_key)
+    if cached:
+        return json.loads(cached)
+
+    async with pool.acquire() as conn:
+        branch_total = await conn.fetchval("SELECT COUNT(*) FROM branch_info")
+        atm_total = await conn.fetchval("SELECT COUNT(*) FROM atm_info")
+
+        branch_rows = await conn.fetch(
+            "SELECT city, COUNT(*) AS count FROM branch_info "
+            "WHERE city IS NOT NULL GROUP BY city ORDER BY count DESC LIMIT 15"
+        )
+        atm_rows = await conn.fetch(
+            "SELECT city, COUNT(*) AS count FROM atm_info "
+            "WHERE city IS NOT NULL GROUP BY city ORDER BY count DESC LIMIT 15"
+        )
+
+    data = {
+        "total_branches": branch_total,
+        "total_atms": atm_total,
+        "branch_by_city": [{"city": r["city"], "count": r["count"]} for r in branch_rows],
+        "atm_by_city": [{"city": r["city"], "count": r["count"]} for r in atm_rows],
+    }
+
+    await redis.setex(cache_key, CACHE_TTL, json.dumps(data))
+    return data

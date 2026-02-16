@@ -14,6 +14,15 @@ async def list_banks(
     return await bank_service.get_banks(pool, redis)
 
 
+@router.get("/dashboard-stats")
+async def dashboard_stats(
+    pool=Depends(get_pg),
+    redis=Depends(get_redis_client),
+):
+    """Aggregated statistics for the main dashboard."""
+    return await bank_service.get_dashboard_stats(pool, redis)
+
+
 @router.get("/search")
 async def search(
     q: str = Query(..., min_length=1),

@@ -9,6 +9,7 @@ import type { FinancialRecord, PeriodInfo, TimeSeriesPoint } from '../types';
 const FinancialStatements: React.FC = () => {
   const [year, setYear] = useState<number | undefined>();
   const [month, setMonth] = useState<number | undefined>();
+  const [accountingSystem, setAccountingSystem] = useState<string | undefined>();
   const [bankName, setBankName] = useState<string | undefined>();
   const [mainStatement, setMainStatement] = useState<string | undefined>();
   const [childStatement, setChildStatement] = useState<string | undefined>();
@@ -17,7 +18,7 @@ const FinancialStatements: React.FC = () => {
 
   const { data: periods } = useFinancialPeriods();
   const { data: statementsData, isLoading } = useFinancialStatements({
-    year, month, bank_name: bankName,
+    year, month, accounting_system: accountingSystem, bank_name: bankName,
     main_statement: mainStatement, child_statement: childStatement,
     limit, offset: (page - 1) * limit,
   });
@@ -102,6 +103,17 @@ const FinancialStatements: React.FC = () => {
             selectedMonth={month}
             onYearChange={(y) => { setYear(y); setMonth(undefined); }}
             onMonthChange={setMonth}
+          />
+          <Select
+            placeholder="Muhasebe Sistemi"
+            allowClear
+            value={accountingSystem}
+            onChange={(val: string | undefined) => { setAccountingSystem(val); setPage(1); }}
+            style={{ width: 200 }}
+            options={[
+              { value: 'SOLO', label: 'Solo' },
+              { value: 'KONSOLİDE', label: 'Konsolide' },
+            ]}
           />
           <Select
             placeholder="Banka secin"

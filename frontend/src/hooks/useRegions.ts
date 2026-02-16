@@ -36,3 +36,19 @@ export function useRegionComparison(metric: string, year: number) {
     enabled: !!metric && !!year,
   });
 }
+
+export function useCreditHhi(year: number) {
+  return useQuery({
+    queryKey: ['regions', 'credit-hhi', year],
+    queryFn: () => regionsApi.getCreditHhi(year).then(r => r.data),
+    enabled: !!year,
+  });
+}
+
+export function useLoanDepositRatio(year: number) {
+  return useQuery({
+    queryKey: ['regions', 'loan-deposit-ratio', year],
+    queryFn: () => regionsApi.getLoanDepositRatio(year).then(r => r.data),
+    enabled: !!year,
+  });
+}

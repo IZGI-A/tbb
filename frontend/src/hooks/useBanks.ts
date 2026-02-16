@@ -39,3 +39,10 @@ export function useBankHistory(bankName: string) {
     enabled: !!bankName,
   });
 }
+
+export function useBankDashboardStats() {
+  return useQuery({
+    queryKey: ['banks', 'dashboard-stats'],
+    queryFn: () => banksApi.getDashboardStats().then(r => r.data),
+  });
+}

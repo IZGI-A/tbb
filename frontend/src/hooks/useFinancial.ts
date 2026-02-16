@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { financialApi } from '../api/client';
-import type { FinancialRecord, FinancialSummary, PaginatedResponse, PeriodInfo, TimeSeriesPoint } from '../types';
+import type { BankRatios, FinancialRecord, FinancialSummary, PaginatedResponse, PeriodInfo, RatioType, TimeSeriesPoint } from '../types';
 
 export function useFinancialStatements(params: Record<string, unknown>) {
   return useQuery<PaginatedResponse<FinancialRecord>>({
@@ -51,5 +51,20 @@ export function useFinancialTimeSeries(params: Record<string, unknown>) {
     queryKey: ['financial', 'time-series', params],
     queryFn: () => financialApi.getTimeSeries(params).then(r => r.data),
     enabled: !!params.bank_name,
+  });
+}
+
+export function useFinancialRatioTypes() {
+  return useQuery<RatioType[]>({
+    queryKey: ['financial', 'ratio-types'],
+    queryFn: () => financialApi.getRatioTypes().then(r => r.data),
+  });
+}
+
+export function useFinancialRatios(year: number, month: number, accountingSystem?: string) {
+  return useQuery<BankRatios[]>({
+    queryKey: ['financial', 'ratios', year, month, accountingSystem],
+    queryFn: () => financialApi.getRatios({ year, month, accounting_system: accountingSystem }).then(r => r.data),
+    enabled: !!year && !!month,
   });
 }
