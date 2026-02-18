@@ -7,6 +7,8 @@ import {
   AlertOutlined,
   BankOutlined,
   ExperimentOutlined,
+  SwapOutlined,
+  SafetyOutlined,
 } from '@ant-design/icons';
 import { useNavigate, useLocation, Outlet } from 'react-router-dom';
 
@@ -19,6 +21,8 @@ const menuItems = [
   { key: '/risk-center', icon: <AlertOutlined />, label: 'Risk Merkezi' },
   { key: '/banks', icon: <BankOutlined />, label: 'Banka Rehberi' },
   { key: '/liquidity', icon: <ExperimentOutlined />, label: 'Likidite Analizi' },
+  { key: '/comparison', icon: <SwapOutlined />, label: 'Banka Karsilastirmasi' },
+  { key: '/risk', icon: <SafetyOutlined />, label: 'Risk Analizi' },
 ];
 
 const AppLayout: React.FC = () => {

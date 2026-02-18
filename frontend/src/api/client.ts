@@ -90,4 +90,14 @@ export const liquidityApi = {
     apiClient.get('/liquidity/group-time-series', { params }),
 };
 
+// Risk Analysis
+export const riskAnalysisApi = {
+  getZScore: (params: { year: number; month: number; accounting_system?: string }) =>
+    apiClient.get('/risk-analysis/zscore', { params }),
+  getZScoreTimeSeries: (params: { bank_name?: string; accounting_system?: string }) =>
+    apiClient.get('/risk-analysis/zscore-time-series', { params }),
+  getLCRisk: (params: { year: number; month: number; accounting_system?: string }) =>
+    apiClient.get('/risk-analysis/lc-risk', { params }),
+};
+
 export default apiClient;

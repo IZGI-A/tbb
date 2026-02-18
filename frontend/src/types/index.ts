@@ -183,3 +183,32 @@ export interface LiquidityDecomposition {
     illiquid_obs_contrib: number;
   };
 }
+
+export interface ZScoreRanking {
+  bank_name: string;
+  z_score: number | null;
+  roa: number;
+  capital_ratio: number;
+  roa_std: number | null;
+  total_assets: number;
+  equity: number;
+  net_income: number;
+}
+
+export interface ZScoreTimeSeries {
+  bank_name: string;
+  year_id: number;
+  month_id: number;
+  z_score: number | null;
+  roa: number;
+  capital_ratio: number;
+}
+
+export interface LCRiskRelationship {
+  bank_name: string;
+  z_score: number | null;
+  lc_nonfat: number;
+  roa: number;
+  capital_ratio: number;
+  total_assets: number;
+}

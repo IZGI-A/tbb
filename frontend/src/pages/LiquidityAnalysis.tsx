@@ -2,25 +2,19 @@ import React, { useState } from 'react';
 import { Card, Select, Space, Table, Row, Col, Statistic, Tooltip } from 'antd';
 import { InfoCircleOutlined } from '@ant-design/icons';
 import LineChart from '../components/charts/LineChart';
-import BarChart from '../components/charts/BarChart';
 import YearMonthFilter from '../components/filters/YearMonthFilter';
-import { useFinancialPeriods, useFinancialBankNames } from '../hooks/useFinancial';
+import { useFinancialPeriods } from '../hooks/useFinancial';
 import {
   useLiquidityCreation,
-  useLiquidityTimeSeries,
   useLiquidityGroupTimeSeries,
-  useLiquidityDecomposition,
 } from '../hooks/useLiquidity';
-import type { PeriodInfo, LiquidityCreation, LiquidityTimeSeries, LiquidityGroupTimeSeries } from '../types';
+import type { PeriodInfo, LiquidityCreation, LiquidityGroupTimeSeries } from '../types';
 
 const LiquidityAnalysis: React.FC = () => {
   const [year, setYear] = useState<number | undefined>();
   const [month, setMonth] = useState<number | undefined>();
   const [accountingSystem, setAccountingSystem] = useState<string | undefined>();
-  const [selectedBank, setSelectedBank] = useState<string | undefined>();
-
   const { data: periods } = useFinancialPeriods();
-  const { data: bankNames } = useFinancialBankNames();
 
   const periodList = (periods ?? []) as PeriodInfo[];
   const years: number[] = Array.from(new Set<number>(periodList.map(p => p.year_id))).sort(
@@ -35,14 +29,8 @@ const LiquidityAnalysis: React.FC = () => {
     : [];
 
   // Queries
-  const { data: bankTs, isLoading: bankTsLoading } = useLiquidityTimeSeries(
-    selectedBank, undefined, undefined, accountingSystem,
-  );
   const { data: creation, isLoading: creationLoading } = useLiquidityCreation(
     year, month, accountingSystem,
-  );
-const { data: decomposition } = useLiquidityDecomposition(
-    selectedBank, year, month, accountingSystem,
   );
   const { data: groupTs, isLoading: groupTsLoading } = useLiquidityGroupTimeSeries(
     accountingSystem,
@@ -124,15 +112,6 @@ const { data: decomposition } = useLiquidityDecomposition(
               { value: 'SOLO', label: 'Solo' },
               { value: 'KONSOLİDE', label: 'Konsolide' },
             ]}
-          />
-          <Select
-            placeholder="Banka secin (detay icin)"
-            allowClear
-            showSearch
-            value={selectedBank}
-            onChange={setSelectedBank}
-            style={{ width: 300 }}
-            options={(bankNames ?? []).map((b: string) => ({ value: b, label: b }))}
           />
         </Space>
       </Card>
@@ -247,94 +226,6 @@ const { data: decomposition } = useLiquidityDecomposition(
         </Card>
       )}
 
-      {/* 4. Bank Detail */}
-      {selectedBank && (
-        <>
-          <Card title={`${selectedBank} — LC Zaman Serisi`} style={{ marginBottom: 16 }}>
-            <LineChart
-              title=""
-              xData={(bankTs ?? []).map(
-                (p: LiquidityTimeSeries) => `${p.year_id}/${String(p.month_id).padStart(2, '0')}`
-              )}
-              series={[
-                {
-                  name: 'LC (%)',
-                  data: (bankTs ?? []).map(
-                    (p: LiquidityTimeSeries) => Number((p.lc_nonfat * 100).toFixed(2))
-                  ),
-                },
-              ]}
-              loading={bankTsLoading}
-            />
-          </Card>
-
-          {decomposition && (
-            <Card title={`${selectedBank} — LC Bilesen Analizi`} style={{ marginBottom: 16 }}>
-              <Row gutter={16}>
-                <Col span={6}>
-                  <Statistic
-                    title="LC (Cat Nonfat)"
-                    value={(decomposition.lc_nonfat * 100).toFixed(2)}
-                    suffix="%"
-                  />
-                </Col>
-                <Col span={6}>
-                  <Statistic
-                    title="Likit Olmayan Varlik (+)"
-                    value={(decomposition.weighted_components.illiquid_assets_contrib * 100).toFixed(2)}
-                    suffix="%"
-                    valueStyle={{ color: '#3f8600' }}
-                  />
-                </Col>
-                <Col span={6}>
-                  <Statistic
-                    title="Likit Yukumluluk (+)"
-                    value={(decomposition.weighted_components.liquid_liabilities_contrib * 100).toFixed(2)}
-                    suffix="%"
-                    valueStyle={{ color: '#3f8600' }}
-                  />
-                </Col>
-                <Col span={6}>
-                  <Statistic
-                    title="Likit Varlik (-)"
-                    value={(decomposition.weighted_components.liquid_assets_drag * 100).toFixed(2)}
-                    suffix="%"
-                    valueStyle={{ color: '#cf1322' }}
-                  />
-                </Col>
-              </Row>
-              <Row gutter={16} style={{ marginTop: 16 }}>
-                <Col span={6}>
-                  <Statistic
-                    title="Likit Olm. Yuk. + Ozkaynak (-)"
-                    value={(decomposition.weighted_components.illiquid_liab_equity_drag * 100).toFixed(2)}
-                    suffix="%"
-                    valueStyle={{ color: '#cf1322' }}
-                  />
-                </Col>
-              </Row>
-              <BarChart
-                title=""
-                xData={[
-                  'Likit Olmayan Varliklar (+)',
-                  'Likit Yukumlulukler (+)',
-                  'Likit Varliklar (-)',
-                  'Likit Olmayan Yuk. + Ozkaynak (-)',
-                ]}
-                series={[{
-                  name: 'Katki (%)',
-                  data: [
-                    Number((decomposition.weighted_components.illiquid_assets_contrib * 100).toFixed(2)),
-                    Number((decomposition.weighted_components.liquid_liabilities_contrib * 100).toFixed(2)),
-                    Number((decomposition.weighted_components.liquid_assets_drag * 100).toFixed(2)),
-                    Number((decomposition.weighted_components.illiquid_liab_equity_drag * 100).toFixed(2)),
-                  ],
-                }]}
-              />
-            </Card>
-          )}
-        </>
-      )}
     </div>
   );
 };
