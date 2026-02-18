@@ -276,21 +276,21 @@ async def get_financial_ratios(
     query = """
         SELECT
             bank_name,
-            sumIf(amount_total, main_statement = '1. VARLIKLAR'
+            sumIf(amount_total, startsWith(main_statement, '1. VARLIKLAR')
                 AND child_statement = 'XI. VARLIKLAR TOPLAMI') AS total_assets,
-            sumIf(amount_total, main_statement = '2. YÜKÜMLÜLÜKLER'
+            sumIf(amount_total, startsWith(main_statement, '2. YÜKÜMLÜLÜKLER')
                 AND child_statement = 'XVI. ÖZKAYNAKLAR') AS equity,
-            sumIf(amount_total, main_statement = '4. GELİR-GİDER TABLOSU'
+            sumIf(amount_total, startsWith(main_statement, '4. GELİR-GİDER TABLOSU')
                 AND child_statement = 'XXV. DÖNEM NET KARI/ZARARI (XIX+XXIV)') AS net_profit,
-            sumIf(amount_total, main_statement = '4. GELİR-GİDER TABLOSU'
+            sumIf(amount_total, startsWith(main_statement, '4. GELİR-GİDER TABLOSU')
                 AND child_statement = 'III. NET FAİZ GELİRİ/GİDERİ (I - II)') AS net_interest_income,
-            sumIf(amount_total, main_statement = '1. VARLIKLAR'
+            sumIf(amount_total, startsWith(main_statement, '1. VARLIKLAR')
                 AND child_statement = '2.1. Krediler') AS total_loans,
-            sumIf(amount_total, main_statement = '1. VARLIKLAR'
+            sumIf(amount_total, startsWith(main_statement, '1. VARLIKLAR')
                 AND child_statement = '2.5 Beklenen Zarar Karşılıkları (-) (TFRS 9 uygulayan b.)') AS credit_provisions,
-            sumIf(amount_fc, main_statement = '1. VARLIKLAR'
+            sumIf(amount_fc, startsWith(main_statement, '1. VARLIKLAR')
                 AND child_statement = 'XI. VARLIKLAR TOPLAMI') AS assets_fc,
-            sumIf(amount_fc, main_statement = '2. YÜKÜMLÜLÜKLER'
+            sumIf(amount_fc, startsWith(main_statement, '2. YÜKÜMLÜLÜKLER')
                 AND child_statement = 'XVII. YÜKÜMLÜLÜKLER TOPLAMI') AS liabilities_fc
         FROM tbb.financial_statements FINAL
         WHERE year_id = %(year)s AND month_id = %(month)s

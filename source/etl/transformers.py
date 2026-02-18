@@ -69,10 +69,10 @@ def transform_financial(raw_records: list[dict]) -> list[dict]:
     """
     rows = []
     for record in raw_records:
-        accounting_system = _first_of(
+        accounting_system = (_first_of(
             "Muhasebe Sistemi", "Hesap Sistemi", "_statement_text",
             record=record,
-        )
+        ) or "").strip()
         main_statement = _first_of(
             "Ana Kalem", "Bilanço Kalemi", "row_text", "_row_text", "col_0",
             record=record,
@@ -81,10 +81,10 @@ def transform_financial(raw_records: list[dict]) -> list[dict]:
             "Alt Kalem", "Kalem", "col_1",
             record=record,
         )
-        bank_name = _first_of(
+        bank_name = (_first_of(
             "Banka", "Banka Adı", "col_2",
             record=record,
-        )
+        ) or "").strip()
 
         # Amount columns — try pivot field names first, then legacy headers
         amount_tc = _safe_decimal(

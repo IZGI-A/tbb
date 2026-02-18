@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from config import settings
 from db.postgres import get_pg_pool, close_pg_pool
 from db.redis import get_redis, close_redis
-from api.routers import financial, regions, risk_center, banks
+from api.routers import financial, regions, risk_center, banks, liquidity
 
 
 @asynccontextmanager
@@ -39,6 +39,7 @@ app.include_router(financial.router, prefix="/api/financial", tags=["Financial"]
 app.include_router(regions.router, prefix="/api/regions", tags=["Regions"])
 app.include_router(risk_center.router, prefix="/api/risk-center", tags=["Risk Center"])
 app.include_router(banks.router, prefix="/api/banks", tags=["Banks"])
+app.include_router(liquidity.router, prefix="/api/liquidity", tags=["Liquidity"])
 
 
 @app.get("/health")

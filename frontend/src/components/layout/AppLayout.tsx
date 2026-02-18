@@ -6,6 +6,7 @@ import {
   GlobalOutlined,
   AlertOutlined,
   BankOutlined,
+  ExperimentOutlined,
 } from '@ant-design/icons';
 import { useNavigate, useLocation, Outlet } from 'react-router-dom';
 
@@ -17,6 +18,7 @@ const menuItems = [
   { key: '/regions', icon: <GlobalOutlined />, label: 'Bolgesel Istatistikler' },
   { key: '/risk-center', icon: <AlertOutlined />, label: 'Risk Merkezi' },
   { key: '/banks', icon: <BankOutlined />, label: 'Banka Rehberi' },
+  { key: '/liquidity', icon: <ExperimentOutlined />, label: 'Likidite Analizi' },
 ];
 
 const AppLayout: React.FC = () => {

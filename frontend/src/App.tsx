@@ -10,6 +10,7 @@ import FinancialStatements from './pages/FinancialStatements';
 import RegionalStats from './pages/RegionalStats';
 import RiskCenter from './pages/RiskCenter';
 import BankDirectory from './pages/BankDirectory';
+import LiquidityAnalysis from './pages/LiquidityAnalysis';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -32,6 +33,7 @@ const App: React.FC = () => {
               <Route path="/regions" element={<RegionalStats />} />
               <Route path="/risk-center" element={<RiskCenter />} />
               <Route path="/banks" element={<BankDirectory />} />
+              <Route path="/liquidity" element={<LiquidityAnalysis />} />
             </Route>
           </Routes>
         </BrowserRouter>

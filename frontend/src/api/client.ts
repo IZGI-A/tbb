@@ -76,4 +76,18 @@ export const banksApi = {
     apiClient.get(`/banks/${encodeURIComponent(bankName)}/history`),
 };
 
+// Liquidity
+export const liquidityApi = {
+  getCreation: (params: { year: number; month: number; accounting_system?: string }) =>
+    apiClient.get('/liquidity/creation', { params }),
+  getTimeSeries: (params: Record<string, unknown>) =>
+    apiClient.get('/liquidity/time-series', { params }),
+  getGroups: (params: { year: number; month: number; accounting_system?: string }) =>
+    apiClient.get('/liquidity/groups', { params }),
+  getDecomposition: (params: { bank_name: string; year: number; month: number; accounting_system?: string }) =>
+    apiClient.get('/liquidity/decomposition', { params }),
+  getGroupTimeSeries: (params: { accounting_system?: string }) =>
+    apiClient.get('/liquidity/group-time-series', { params }),
+};
+
 export default apiClient;

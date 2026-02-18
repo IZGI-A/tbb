@@ -10,6 +10,7 @@ import re
 import time
 from typing import Any
 
+import requests
 from scrapers.base import TBBScraper
 
 logger = logging.getLogger(__name__)
@@ -20,8 +21,43 @@ _ITEM_ID_RE = re.compile(r"\((\d+)\)\s*$")
 _ITEM_ID_FALLBACK_RE = re.compile(r"\b(\d{4,})\)\s*$")
 # Regex to strip arrow prefix like "------>" or "->"
 _ARROW_RE = re.compile(r"^-*>\s*")
+# Regex to extract leading Arabic number prefix like "1.1.1" or "16.6.2"
+_ARABIC_PREFIX_RE = re.compile(r"^(\d+(?:\.\d+)*)")
+# Arabic → Roman numeral (up to 25 for TBB tables)
+_ROMAN = {
+    1: "I", 2: "II", 3: "III", 4: "IV", 5: "V", 6: "VI", 7: "VII",
+    8: "VIII", 9: "IX", 10: "X", 11: "XI", 12: "XII", 13: "XIII",
+    14: "XIV", 15: "XV", 16: "XVI", 17: "XVII", 18: "XVIII",
+    19: "XIX", 20: "XX", 21: "XXI", 22: "XXII", 23: "XXIII",
+    24: "XXIV", 25: "XXV",
+}
 
 FINANCIAL_PAGE = "index.php?/tbb/report_mali"
+
+# TBB public API (returns full item hierarchy with UST_UK parent chains)
+TBB_API_URL = "https://verisistemi.tbb.org.tr/api/router"
+
+# Known DB section roots — hierarchy paths start from the deepest one
+KNOWN_SECTIONS = {
+    "1. VARLIKLAR", "2. YÜKÜMLÜLÜKLER", "3. NAZIM HESAPLAR",
+    "4. GELİR-GİDER TABLOSU",
+    "5. ÖZKAYNAKLARDA MUHASEBELEŞTİRİLEN GELİR GİDER KALEMLERİ",
+    "5. KAR VEYA ZARAR VE DİĞER KAPSAMLI GELİR TABLOSU",
+    "6. ÖZKAYNAK DEĞİŞİM TABLOSU",
+    "6. ÖZKAYNAK DEĞİŞİM TABLOSU-Cari",
+    "6. ÖZKAYNAK DEĞİŞİM TABLOSU-Önceki",
+    "7. NAKİT AKIŞ TABLOSU",
+    "8. KAR DAĞITIM TABLOSU", "9. DİPNOTLAR",
+}
+KNOWN_DIPNOTS = {
+    "1. MALİ BÜNYE İLE İLGİLİ DİPNOTLAR",
+    "2. AKTİFLERLE İLGİLİ DİPNOTLAR",
+    "3. PASİFLERLE İLGİLİ DİPNOTLAR",
+    "4. NAZIM HESAPLARLA İLGİLİ DİPNOTLAR",
+    "5. GELİR TABLOSU İLE İLGİLİ DİPNOTLAR",
+    "6. RİSK GRUBUNA AİT DİPNOTLAR",
+}
+_ALL_KNOWN = KNOWN_SECTIONS | KNOWN_DIPNOTS
 
 # The .btn-dx-select buttons appear in DOM order:
 # index 0 → SOLO, index 1 → CONSOLIDATED
@@ -101,7 +137,8 @@ class FinancialScraper(TBBScraper):
     def _extract_hierarchy_lookup(self) -> dict[int, dict]:
         """Extract the item hierarchy from mlt_data_maliTablolar on the page.
 
-        Returns a dict mapping item ID → {name, parent_id, parent_name, root_name}.
+        Returns a dict mapping item ID → {name, parent_id, parent_name,
+        root_name, ancestors: [top-down list of ancestor names]}.
         """
         result = self.execute_js("""
             if (typeof mlt_data_maliTablolar === 'undefined') return null;
@@ -111,11 +148,21 @@ class FinancialScraper(TBBScraper):
             for (var i = 0; i < keys.length; i++) {
                 var it = lookup[keys[i]];
                 var parentItem = it.UST_UK ? lookup[it.UST_UK] : null;
+                // Walk up the full ancestor chain
+                var ancestors = [];
+                var cur = it.UST_UK;
+                var visited = {};
+                while (cur && lookup[cur] && !visited[cur]) {
+                    visited[cur] = true;
+                    ancestors.unshift(lookup[cur].TR_ADI || '');
+                    cur = lookup[cur].UST_UK;
+                }
                 out[it.UNIQUE_KEY] = {
                     name: it.TR_ADI || '',
                     parent_id: it.UST_UK || 0,
                     parent_name: parentItem ? (parentItem.TR_ADI || '') : '',
-                    root_name: it.ROOT_TR_ADI || ''
+                    root_name: it.ROOT_TR_ADI || '',
+                    ancestors: ancestors
                 };
             }
             return JSON.stringify(out);
@@ -187,6 +234,9 @@ class FinancialScraper(TBBScraper):
 
         all_records: list[dict[str, Any]] = []
 
+        # Fetch TBB API hierarchy once (has correct UST_UK parent chains)
+        api_hierarchy = self._fetch_api_hierarchy()
+
         for table_key in table_keys:
             table_label = TABLE_TYPES.get(table_key, {}).get("label", table_key)
 
@@ -202,6 +252,7 @@ class FinancialScraper(TBBScraper):
             if pivot_records:
                 records = self._enrich_records(
                     pivot_records, period_info, table_label, hierarchy,
+                    api_hierarchy=api_hierarchy,
                 )
                 all_records.extend(records)
                 logger.info(
@@ -224,6 +275,7 @@ class FinancialScraper(TBBScraper):
                     if group_records:
                         enriched = self._enrich_records(
                             group_records, period_info, table_label, hierarchy,
+                            api_hierarchy=api_hierarchy,
                         )
                         all_records.extend(enriched)
                         logger.info(
@@ -239,7 +291,12 @@ class FinancialScraper(TBBScraper):
             if not include_individual_banks:
                 continue
 
-            banks = self._get_available_banks()
+            try:
+                banks = self._get_available_banks()
+            except Exception as e:
+                logger.error("Failed to get bank list (tab may have crashed): %s", e)
+                continue
+
             if not banks:
                 logger.warning("No individual banks found, skipping per-bank scrape")
                 continue
@@ -272,6 +329,7 @@ class FinancialScraper(TBBScraper):
                     if batch_records:
                         enriched = self._enrich_records(
                             batch_records, period_info, table_label, hierarchy,
+                            api_hierarchy=api_hierarchy,
                         )
                         all_records.extend(enriched)
                         logger.info(
@@ -319,14 +377,142 @@ class FinancialScraper(TBBScraper):
         m = _ITEM_ID_FALLBACK_RE.search(text)
         return int(m.group(1)) if m else None
 
+    @staticmethod
+    def _fetch_api_hierarchy() -> dict[int, dict]:
+        """Fetch full item hierarchy from TBB public API.
+
+        Returns dict mapping UNIQUE_KEY → {"name": str, "full_path": str}.
+        The full_path starts from the deepest known DB section root
+        (e.g. "1. MALİ BÜNYE İLE İLGİLİ DİPNOTLAR > subsection > item").
+
+        This is preferred over JS page extraction because the API returns
+        correct UST_UK parent chains, while the JS data is often flat.
+        """
+        try:
+            resp = requests.post(
+                TBB_API_URL,
+                json={"route": "maliTablolarAll"},
+                headers={
+                    "Content-Type": "application/json",
+                    "token": "asd",
+                    "role": "1",
+                    "LANG": "tr",
+                },
+                verify=False,
+                timeout=120,
+            )
+            resp.raise_for_status()
+            tbb_items = resp.json()
+        except Exception as e:
+            logger.error("Failed to fetch TBB API hierarchy: %s", e)
+            return {}
+
+        logger.info("Fetched %d items from TBB API", len(tbb_items))
+        lookup = {
+            item["UNIQUE_KEY"]: item
+            for item in tbb_items
+            if item.get("UNIQUE_KEY")
+        }
+
+        def _api_clean(name: str) -> str:
+            name = _ITEM_ID_RE.sub("", name)
+            name = _ITEM_ID_FALLBACK_RE.sub("", name)
+            return name.strip()
+
+        def _build_full_path(item: dict) -> str:
+            """Build path from deepest known DB section to item (inclusive)."""
+            name = _api_clean(item.get("TR_ADI", ""))
+            chain = []
+            cur = item.get("UST_UK")
+            visited = set()
+            while cur and cur in lookup and cur not in visited:
+                visited.add(cur)
+                parent = lookup[cur]
+                chain.append(_api_clean(parent.get("TR_ADI", "")))
+                cur = parent.get("UST_UK")
+            chain.reverse()
+            chain.append(name)
+            # Start from deepest known section
+            start_idx = 0
+            for i, part in enumerate(chain):
+                if part in _ALL_KNOWN:
+                    start_idx = i
+            # Safety: skip accounting system names that leaked into the path
+            while start_idx < len(chain) and chain[start_idx].startswith("TFRS"):
+                start_idx += 1
+            return " > ".join(chain[start_idx:])
+
+        result: dict[int, dict] = {}
+        for item in tbb_items:
+            uk = item.get("UNIQUE_KEY")
+            if not uk:
+                continue
+            name = _api_clean(item.get("TR_ADI", ""))
+            full_path = _build_full_path(item)
+            result[uk] = {"name": name, "full_path": full_path}
+
+        logger.info("Built API hierarchy paths for %d items", len(result))
+        return result
+
+    @staticmethod
+    def _build_hierarchy_path(
+        item_name: str,
+        root: str,
+        known_items: set[str],
+    ) -> tuple[str, str]:
+        """Infer full hierarchy path from Arabic numbering convention.
+
+        Returns (main_statement_path, child_statement).
+        Used as fallback when API hierarchy is unavailable.
+        """
+        m = _ARABIC_PREFIX_RE.match(item_name)
+        if not m:
+            return root, item_name
+
+        num_str = m.group(1).rstrip(".")
+        parts = num_str.split(".")
+
+        path = [root]
+
+        first_num = int(parts[0])
+        roman = _ROMAN.get(first_num)
+        if roman:
+            prefix_dot = f"{roman}."
+            prefix_sp = f"{roman} "
+            for ki in known_items:
+                if ki.startswith(prefix_dot) or ki.startswith(prefix_sp):
+                    path.append(ki)
+                    break
+
+        for depth in range(1, len(parts) - 1):
+            intermediate_prefix = ".".join(parts[: depth + 1])
+            for ki in known_items:
+                if ki.startswith(intermediate_prefix + " "):
+                    path.append(ki)
+                    break
+                if ki.startswith(intermediate_prefix + "."):
+                    rest = ki[len(intermediate_prefix) + 1:]
+                    if rest and not rest[0].isdigit():
+                        path.append(ki)
+                        break
+
+        return " > ".join(path), item_name
+
     def _enrich_records(
         self,
         pivot_records: list[dict],
         period_info: list[dict],
         statement_label: str,
         hierarchy: dict[int, dict] | None = None,
+        api_hierarchy: dict[int, dict] | None = None,
     ) -> list[dict[str, Any]]:
-        """Add period, statement, and hierarchy metadata to pivot records."""
+        """Add period, statement, and hierarchy metadata to pivot records.
+
+        Uses TBB API hierarchy as primary source (correct UST_UK chains).
+        Falls back to JS page hierarchy + numbering inference when API
+        data is unavailable for an item.
+        """
+        api_hierarchy = api_hierarchy or {}
         hierarchy = hierarchy or {}
 
         # Build a lookup: "YYYY M" → period dict
@@ -335,7 +521,20 @@ class FinancialScraper(TBBScraper):
             key = f"{p['year']} {p['month']}"
             period_lookup[key] = p
 
+        # Pre-compute items_by_root for numbering-based fallback
+        items_by_root: dict[str, set[str]] = {}
+        if hierarchy:
+            for info in hierarchy.values():
+                name = self._clean_item_name(info.get("name", ""))
+                ancestors = info.get("ancestors", [])
+                if ancestors:
+                    section_root = self._clean_item_name(ancestors[0])
+                    if section_root:
+                        items_by_root.setdefault(section_root, set()).add(name)
+
         enriched: list[dict[str, Any]] = []
+        api_hits = 0
+
         for record in pivot_records:
             rec = dict(record)
 
@@ -361,29 +560,57 @@ class FinancialScraper(TBBScraper):
             if "MUHASEBE SİSTEMİ" in rec:
                 rec["Muhasebe Sistemi"] = rec.pop("MUHASEBE SİSTEMİ")
 
-            # Split into Ana Kalem (parent) and Alt Kalem (self) using hierarchy
             item_id = self._extract_item_id(raw_kalem)
 
-            if item_id and item_id in hierarchy:
-                info = hierarchy[item_id]
-                # Use hierarchy's own name (TR_ADI) for cleaner formatting
-                item_name = self._clean_item_name(info.get("name", raw_kalem))
-                parent_name = self._clean_item_name(info.get("parent_name", ""))
-                root_name = info.get("root_name", "").strip()
+            # --- PRIMARY: TBB API hierarchy (correct UST_UK parent chains) ---
+            if item_id and item_id in api_hierarchy:
+                info = api_hierarchy[item_id]
+                full_path = info["full_path"]
+                name = info["name"]
+                parts = full_path.split(" > ")
+                if len(parts) > 1:
+                    rec["Ana Kalem"] = " > ".join(parts[:-1])
+                    rec["Alt Kalem"] = name
+                else:
+                    # Item is a root section itself
+                    rec["Ana Kalem"] = name
+                    rec["Alt Kalem"] = ""
+                api_hits += 1
 
-                # If parent is ROOT (parent_name matches root table name or
-                # parent has no further parent), this is a top-level item
+            # --- FALLBACK: JS hierarchy + numbering inference ---
+            elif item_id and item_id in hierarchy:
+                info = hierarchy[item_id]
+                item_name = self._clean_item_name(info.get("name", raw_kalem))
+                root_name = info.get("root_name", "").strip()
+                parent_name = self._clean_item_name(info.get("parent_name", ""))
+
                 if not parent_name or parent_name == root_name:
                     rec["Ana Kalem"] = item_name
                     rec["Alt Kalem"] = ""
                 else:
-                    rec["Ana Kalem"] = parent_name
-                    rec["Alt Kalem"] = item_name
+                    known = items_by_root.get(parent_name, set())
+                    if not known:
+                        for hi in hierarchy.values():
+                            pn = self._clean_item_name(hi.get("parent_name", ""))
+                            if pn == parent_name:
+                                known.add(self._clean_item_name(hi.get("name", "")))
+                        known.discard("")
+
+                    main_path, child = self._build_hierarchy_path(
+                        item_name, parent_name, known,
+                    )
+                    rec["Ana Kalem"] = main_path
+                    rec["Alt Kalem"] = child
+
+            # --- LAST RESORT ---
             else:
-                # Fallback: no hierarchy data, put everything in Ana Kalem
                 rec["Ana Kalem"] = self._clean_item_name(raw_kalem)
                 rec["Alt Kalem"] = ""
 
             enriched.append(rec)
 
+        logger.info(
+            "Enriched %d records (%d from API hierarchy, %d fallback)",
+            len(enriched), api_hits, len(enriched) - api_hits,
+        )
         return enriched

@@ -117,3 +117,69 @@ export interface DashboardStats {
   branch_by_city: { city: string; count: number }[];
   atm_by_city: { city: string; count: number }[];
 }
+
+export type LiquidityMeasure = 'nonfat' | 'fat';
+
+export interface LiquidityCreation {
+  bank_name: string;
+  lc_ratio: number;
+  lc_nonfat: number;
+  lc_fat: number;
+  liquid_assets: number;
+  semi_liquid_assets: number;
+  illiquid_assets: number;
+  liquid_liabilities: number;
+  semi_liquid_liabilities: number;
+  illiquid_liabilities_equity: number;
+  illiquid_obs: number;
+  semi_liquid_obs: number;
+  total_assets: number;
+}
+
+export interface LiquidityTimeSeries {
+  year_id: number;
+  month_id: number;
+  lc_ratio: number;
+  lc_nonfat: number;
+  lc_fat: number;
+}
+
+export interface LiquidityGroup {
+  group_name: string;
+  lc_ratio: number;
+  lc_nonfat: number;
+  lc_fat: number;
+  bank_count: number;
+}
+
+export interface LiquidityGroupTimeSeries {
+  group_name: string;
+  year_id: number;
+  month_id: number;
+  lc_nonfat: number;
+}
+
+export interface LiquidityDecomposition {
+  bank_name: string;
+  lc_ratio: number;
+  lc_nonfat: number;
+  lc_fat: number;
+  total_assets: number;
+  components: {
+    liquid_assets: number;
+    semi_liquid_assets: number;
+    illiquid_assets: number;
+    liquid_liabilities: number;
+    semi_liquid_liabilities: number;
+    illiquid_liabilities_equity: number;
+    illiquid_obs: number;
+    semi_liquid_obs: number;
+  };
+  weighted_components: {
+    illiquid_assets_contrib: number;
+    liquid_liabilities_contrib: number;
+    liquid_assets_drag: number;
+    illiquid_liab_equity_drag: number;
+    illiquid_obs_contrib: number;
+  };
+}

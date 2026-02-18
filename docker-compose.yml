@@ -29,7 +29,7 @@ services:
     - -c
     - checkpoint_timeout=30min
     - -c
-    - shared_buffers=160MB
+    - shared_buffers=528MB
     ports:
     - "5432:5432"
     volumes:
@@ -44,7 +44,7 @@ services:
     deploy:
       resources:
         limits:
-          memory: 640m
+          memory: 2112m
   clickhouse:
     image: clickhouse/clickhouse-server:24.1
     ports:
@@ -62,7 +62,7 @@ services:
     deploy:
       resources:
         limits:
-          memory: 1536m
+          memory: 3456m
   redis:
     image: redis:7-alpine
     ports:
@@ -78,11 +78,11 @@ services:
     deploy:
       resources:
         limits:
-          memory: 256m
+          memory: 704m
     command:
     - redis-server
     - --maxmemory
-    - 230mb
+    - 633mb
     - --maxmemory-policy
     - allkeys-lru
   airflow-webserver:
@@ -101,7 +101,7 @@ services:
     deploy:
       resources:
         limits:
-          memory: 512m
+          memory: 1728m
   airflow-scheduler:
     <<: *airflow-common
     command: airflow scheduler
@@ -110,7 +110,7 @@ services:
     deploy:
       resources:
         limits:
-          memory: 448m
+          memory: 1408m
   fastapi:
     build:
       context: ./source
@@ -130,7 +130,7 @@ services:
     deploy:
       resources:
         limits:
-          memory: 384m
+          memory: 1152m
   frontend:
     build:
       context: ./frontend
@@ -144,7 +144,7 @@ services:
     deploy:
       resources:
         limits:
-          memory: 192m
+          memory: 512m
 volumes:
   postgres-data:
   clickhouse-data:
