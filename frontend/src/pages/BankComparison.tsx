@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Card, Select, Space, Row, Col, Statistic, Empty } from 'antd';
+import ReactECharts from 'echarts-for-react';
 import LineChart from '../components/charts/LineChart';
-import BarChart from '../components/charts/BarChart';
 import YearMonthFilter from '../components/filters/YearMonthFilter';
 import { useFinancialPeriods, useFinancialBankNames } from '../hooks/useFinancial';
 import {
@@ -152,13 +152,47 @@ const BankComparison: React.FC = () => {
       {/* LC Bar Comparison (single period) */}
       {year && month && selectedBanks.length > 0 && (
         <Card title={`LC Karsilastirmasi — ${year}/${String(month).padStart(2, '0')}`} style={{ marginBottom: 16 }}>
-          <BarChart
-            title=""
-            xData={barComparison.xData}
-            series={[{
-              name: 'LC (%)',
-              data: barComparison.data,
-            }]}
+          <ReactECharts
+            style={{ height: Math.max(300, barComparison.xData.length * 40) }}
+            option={{
+              tooltip: {
+                trigger: 'axis',
+                formatter: (params: any) => {
+                  const p = params[0];
+                  return `<strong>${p.name}</strong><br/>${p.seriesName}: %${p.value}`;
+                },
+              },
+              grid: { left: 8, right: 50, top: 8, bottom: 8, containLabel: true },
+              xAxis: { type: 'value', axisLabel: { formatter: '%{value}' } },
+              yAxis: {
+                type: 'category',
+                data: [...barComparison.xData].reverse(),
+                axisLabel: { fontSize: 11, width: 180, overflow: 'truncate' },
+              },
+              series: [{
+                name: 'LC Orani',
+                type: 'bar',
+                data: [...barComparison.data].reverse(),
+                barMaxWidth: 22,
+                itemStyle: {
+                  borderRadius: [0, 4, 4, 0],
+                  color: {
+                    type: 'linear', x: 0, y: 0, x2: 1, y2: 0,
+                    colorStops: [
+                      { offset: 0, color: '#1677ff' },
+                      { offset: 1, color: '#69b1ff' },
+                    ],
+                  } as any,
+                },
+                label: {
+                  show: true,
+                  position: 'right',
+                  fontSize: 11,
+                  color: '#555',
+                  formatter: (p: any) => `%${p.value}`,
+                },
+              }],
+            }}
           />
         </Card>
       )}
@@ -215,69 +249,115 @@ const BankComparison: React.FC = () => {
           <Empty description="Veri bulunamadi" />
         )}
 
-        {decomposition && (
-          <>
-            <Row gutter={16}>
-              <Col flex={1}>
-                <Statistic
-                  title="LC (Cat Nonfat)"
-                  value={(decomposition.lc_nonfat * 100).toFixed(2)}
-                  suffix="%"
-                />
-              </Col>
-              <Col flex={1}>
-                <Statistic
-                  title="Likit Olmayan Varlik (+)"
-                  value={(decomposition.weighted_components.illiquid_assets_contrib * 100).toFixed(2)}
-                  suffix="%"
-                  valueStyle={{ color: '#3f8600' }}
-                />
-              </Col>
-              <Col flex={1}>
-                <Statistic
-                  title="Likit Yukumluluk (+)"
-                  value={(decomposition.weighted_components.liquid_liabilities_contrib * 100).toFixed(2)}
-                  suffix="%"
-                  valueStyle={{ color: '#3f8600' }}
-                />
-              </Col>
-              <Col flex={1}>
-                <Statistic
-                  title="Likit Varlik (-)"
-                  value={(decomposition.weighted_components.liquid_assets_drag * 100).toFixed(2)}
-                  suffix="%"
-                  valueStyle={{ color: '#cf1322' }}
-                />
-              </Col>
-              <Col flex={1}>
-                <Statistic
-                  title="Likit Olm. Yuk. + Ozkaynak (-)"
-                  value={(decomposition.weighted_components.illiquid_liab_equity_drag * 100).toFixed(2)}
-                  suffix="%"
-                  valueStyle={{ color: '#cf1322' }}
-                />
-              </Col>
-            </Row>
-            <BarChart
-              title=""
-              xData={[
-                'Likit Olmayan Varliklar (+)',
-                'Likit Yukumlulukler (+)',
-                'Likit Varliklar (-)',
-                'Likit Olmayan Yuk. + Ozkaynak (-)',
-              ]}
-              series={[{
-                name: 'Katki (%)',
-                data: [
-                  Number((decomposition.weighted_components.illiquid_assets_contrib * 100).toFixed(2)),
-                  Number((decomposition.weighted_components.liquid_liabilities_contrib * 100).toFixed(2)),
-                  Number((decomposition.weighted_components.liquid_assets_drag * 100).toFixed(2)),
-                  Number((decomposition.weighted_components.illiquid_liab_equity_drag * 100).toFixed(2)),
-                ],
-              }]}
-            />
-          </>
-        )}
+        {decomposition && (() => {
+          const components = [
+            { name: 'Likit Olmayan Varliklar (+)', value: Number((decomposition.weighted_components.illiquid_assets_contrib * 100).toFixed(2)), positive: true },
+            { name: 'Likit Yukumlulukler (+)', value: Number((decomposition.weighted_components.liquid_liabilities_contrib * 100).toFixed(2)), positive: true },
+            { name: 'Likit Varliklar (-)', value: Number((decomposition.weighted_components.liquid_assets_drag * 100).toFixed(2)), positive: false },
+            { name: 'Likit Olm. Yuk. + Ozkaynak (-)', value: Number((decomposition.weighted_components.illiquid_liab_equity_drag * 100).toFixed(2)), positive: false },
+          ];
+          return (
+            <>
+              <Row gutter={16} style={{ marginBottom: 16 }}>
+                <Col flex={1}>
+                  <Card style={{ background: '#f0f5ff', border: '1px solid #d6e4ff' }}>
+                    <Statistic
+                      title="LC (Cat Nonfat)"
+                      value={(decomposition.lc_nonfat * 100).toFixed(2)}
+                      suffix="%"
+                      valueStyle={{ fontWeight: 700, fontSize: 22 }}
+                    />
+                  </Card>
+                </Col>
+                <Col flex={1}>
+                  <Card style={{ background: '#f6ffed', border: '1px solid #d9f7be' }}>
+                    <Statistic
+                      title="Likit Olmayan Varlik (+)"
+                      value={(decomposition.weighted_components.illiquid_assets_contrib * 100).toFixed(2)}
+                      suffix="%"
+                      valueStyle={{ color: '#389e0d' }}
+                    />
+                  </Card>
+                </Col>
+                <Col flex={1}>
+                  <Card style={{ background: '#f6ffed', border: '1px solid #d9f7be' }}>
+                    <Statistic
+                      title="Likit Yukumluluk (+)"
+                      value={(decomposition.weighted_components.liquid_liabilities_contrib * 100).toFixed(2)}
+                      suffix="%"
+                      valueStyle={{ color: '#389e0d' }}
+                    />
+                  </Card>
+                </Col>
+                <Col flex={1}>
+                  <Card style={{ background: '#fff2f0', border: '1px solid #ffccc7' }}>
+                    <Statistic
+                      title="Likit Varlik (-)"
+                      value={(decomposition.weighted_components.liquid_assets_drag * 100).toFixed(2)}
+                      suffix="%"
+                      valueStyle={{ color: '#cf1322' }}
+                    />
+                  </Card>
+                </Col>
+                <Col flex={1}>
+                  <Card style={{ background: '#fff2f0', border: '1px solid #ffccc7' }}>
+                    <Statistic
+                      title="Likit Olm. Yuk. + Ozkaynak (-)"
+                      value={(decomposition.weighted_components.illiquid_liab_equity_drag * 100).toFixed(2)}
+                      suffix="%"
+                      valueStyle={{ color: '#cf1322' }}
+                    />
+                  </Card>
+                </Col>
+              </Row>
+              <ReactECharts
+                style={{ height: 350 }}
+                option={{
+                  tooltip: {
+                    trigger: 'axis',
+                    formatter: (params: any) => {
+                      const p = params[0];
+                      return `<strong>${p.name}</strong><br/>Katki: %${p.value}`;
+                    },
+                  },
+                  grid: { left: 8, right: 50, top: 16, bottom: 8, containLabel: true },
+                  xAxis: {
+                    type: 'category',
+                    data: components.map(c => c.name),
+                    axisLabel: { fontSize: 10, interval: 0, width: 120, overflow: 'break' },
+                  },
+                  yAxis: {
+                    type: 'value',
+                    axisLabel: { formatter: '%{value}' },
+                    splitLine: { lineStyle: { type: 'dashed', color: '#e8e8e8' } },
+                  },
+                  series: [{
+                    name: 'Katki',
+                    type: 'bar',
+                    data: components.map(c => ({
+                      value: c.value,
+                      itemStyle: {
+                        borderRadius: c.positive ? [4, 4, 0, 0] : [0, 0, 4, 4],
+                        color: c.positive
+                          ? { type: 'linear', x: 0, y: 0, x2: 0, y2: 1, colorStops: [{ offset: 0, color: '#52c41a' }, { offset: 1, color: '#95de64' }] }
+                          : { type: 'linear', x: 0, y: 0, x2: 0, y2: 1, colorStops: [{ offset: 0, color: '#ff7875' }, { offset: 1, color: '#f5222d' }] },
+                      },
+                    })),
+                    barMaxWidth: 60,
+                    label: {
+                      show: true,
+                      position: 'top',
+                      fontSize: 12,
+                      fontWeight: 600,
+                      color: '#333',
+                      formatter: (p: any) => `%${p.value}`,
+                    },
+                  }],
+                }}
+              />
+            </>
+          );
+        })()}
       </Card>
     </div>
   );

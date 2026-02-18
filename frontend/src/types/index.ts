@@ -213,3 +213,11 @@ export interface LCRiskRelationship {
   total_assets: number;
   bank_group: string;
 }
+
+export interface RegionalLiquidity {
+  city: string;
+  lc_amount: number;
+  branch_count: number;
+  bank_count: number;
+  avg_lc_ratio: number | null;
+}

@@ -11,7 +11,7 @@ import BarChart from '../components/charts/BarChart';
 import PieChart from '../components/charts/PieChart';
 import { useFinancialSummary, useFinancialTimeSeries, useFinancialPeriods, useFinancialRatioTypes, useFinancialRatios } from '../hooks/useFinancial';
 import { useBanks, useBankDashboardStats } from '../hooks/useBanks';
-import { useRegionComparison, useRegionMetrics, useRegionPeriods, useLoanDepositRatio, useCreditHhi } from '../hooks/useRegions';
+import { useRegionPeriods, useLoanDepositRatio, useCreditHhi } from '../hooks/useRegions';
 import type { BankInfo, BankRatios, DashboardStats } from '../types';
 
 const formatAmount = (val: number | null | undefined) => {
@@ -23,8 +23,6 @@ const formatAmount = (val: number | null | undefined) => {
 };
 
 const Dashboard: React.FC = () => {
-  const [selectedMetric, setSelectedMetric] = useState<string>('');
-  const [selectedYear, setSelectedYear] = useState<number>(0);
   const [ldrYear, setLdrYear] = useState<number>(0);
   const [hhiYear, setHhiYear] = useState<number>(0);
   const [hhiSectors, setHhiSectors] = useState<string[]>([]);
@@ -42,29 +40,19 @@ const Dashboard: React.FC = () => {
     bank_name: 'Türkiye Bankacılık Sistemi',
     ...(accountingSystem ? { accounting_system: accountingSystem } : {}),
   });
-  const { data: regionMetrics } = useRegionMetrics();
   const { data: regionPeriods } = useRegionPeriods();
   const { data: finPeriods } = useFinancialPeriods();
   const { data: ratioTypes } = useFinancialRatioTypes();
 
-  // Set default metric/year when data loads
+  // Set default year when data loads
   React.useEffect(() => {
-    if (regionMetrics?.length && !selectedMetric) {
-      setSelectedMetric(regionMetrics[0]);
-    }
-  }, [regionMetrics, selectedMetric]);
-
-  React.useEffect(() => {
-    if (regionPeriods?.length && !selectedYear) {
-      setSelectedYear(regionPeriods[0].year_id);
-    }
     if (regionPeriods?.length && !ldrYear) {
       setLdrYear(regionPeriods[0].year_id);
     }
     if (regionPeriods?.length && !hhiYear) {
       setHhiYear(regionPeriods[0].year_id);
     }
-  }, [regionPeriods, selectedYear, ldrYear, hhiYear]);
+  }, [regionPeriods, ldrYear, hhiYear]);
 
   React.useEffect(() => {
     if (finPeriods?.length && !ratioYear) {
@@ -72,11 +60,6 @@ const Dashboard: React.FC = () => {
       setRatioMonth(finPeriods[0].month_id);
     }
   }, [finPeriods, ratioYear]);
-
-  const { data: regionComparison, isLoading: regionCompLoading } = useRegionComparison(
-    selectedMetric,
-    selectedYear,
-  );
 
   const { data: ldrData, isLoading: ldrLoading } = useLoanDepositRatio(ldrYear);
   const { data: hhiData, isLoading: hhiLoading } = useCreditHhi(hhiYear);
@@ -414,46 +397,7 @@ const Dashboard: React.FC = () => {
         )}
       </Card>
 
-      {/* Row 7: Regional Comparison with Filters */}
-      <Card style={{ marginBottom: 24 }}>
-        <Space wrap style={{ marginBottom: 16 }}>
-          <Select
-            placeholder="Metrik secin"
-            value={selectedMetric || undefined}
-            onChange={setSelectedMetric}
-            style={{ width: 300 }}
-            options={regionMetrics?.map((m: string) => ({ value: m, label: m }))}
-          />
-          <Select
-            placeholder="Yil secin"
-            value={selectedYear || undefined}
-            onChange={setSelectedYear}
-            style={{ width: 150 }}
-            options={regionPeriods?.map((p: { year_id: number }) => ({
-              value: p.year_id,
-              label: String(p.year_id),
-            }))}
-          />
-        </Space>
-        {regionCompLoading ? (
-          <Spin />
-        ) : (
-          <BarChart
-            title={`Bolgesel Karsilastirma: ${selectedMetric || ''}`}
-            xData={regionComparison?.map((r: { region: string }) => r.region) ?? []}
-            series={[
-              {
-                name: selectedMetric || 'Deger',
-                data:
-                  regionComparison?.map((r: { value: number | null }) => r.value) ?? [],
-              },
-            ]}
-            loading={regionCompLoading}
-          />
-        )}
-      </Card>
-
-      {/* Row 5: Sector Trend Line Chart */}
+      {/* Sector Trend Line Chart */}
       <Card>
         {tsLoading ? (
           <Spin />

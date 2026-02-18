@@ -10,6 +10,7 @@ import {
   SwapOutlined,
   SafetyOutlined,
   FundOutlined,
+  EnvironmentOutlined,
 } from '@ant-design/icons';
 import { useNavigate, useLocation, Outlet } from 'react-router-dom';
 
@@ -21,10 +22,17 @@ const menuItems = [
   { key: '/regions', icon: <GlobalOutlined />, label: 'Bolgesel Istatistikler' },
   { key: '/risk-center', icon: <AlertOutlined />, label: 'Risk Merkezi' },
   { key: '/banks', icon: <BankOutlined />, label: 'Banka Rehberi' },
-  { key: '/liquidity', icon: <ExperimentOutlined />, label: 'Likidite Analizi' },
-  { key: '/comparison', icon: <SwapOutlined />, label: 'Banka Karsilastirmasi' },
-  { key: '/risk', icon: <SafetyOutlined />, label: 'Risk Analizi' },
-  { key: '/panel-regression', icon: <FundOutlined />, label: 'Panel Regresyon' },
+  {
+    type: 'group' as const,
+    label: 'Likidite Analizleri',
+    children: [
+      { key: '/liquidity', icon: <ExperimentOutlined />, label: 'Likidite Analizi' },
+      { key: '/regional-liquidity', icon: <EnvironmentOutlined />, label: 'Bolgesel Likidite' },
+      { key: '/comparison', icon: <SwapOutlined />, label: 'Banka Karsilastirmasi' },
+      { key: '/risk', icon: <SafetyOutlined />, label: 'Risk Analizi' },
+      { key: '/panel-regression', icon: <FundOutlined />, label: 'Panel Regresyon' },
+    ],
+  },
 ];
 
 const AppLayout: React.FC = () => {

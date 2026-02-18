@@ -100,4 +100,10 @@ export const riskAnalysisApi = {
     apiClient.get('/risk-analysis/lc-risk', { params }),
 };
 
+// Regional Liquidity
+export const regionalLiquidityApi = {
+  getDistribution: (params: { year: number; month: number; accounting_system?: string }) =>
+    apiClient.get('/regional-liquidity/distribution', { params }),
+};
+
 export default apiClient;
