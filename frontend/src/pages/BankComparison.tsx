@@ -14,13 +14,13 @@ import type { PeriodInfo, LiquidityTimeSeries } from '../types';
 const COLORS = ['#1890ff', '#52c41a', '#faad14', '#f5222d', '#722ed1', '#13c2c2', '#eb2f96', '#fa8c16'];
 
 const BankComparison: React.FC = () => {
-  const [year, setYear] = useState<number | undefined>();
-  const [month, setMonth] = useState<number | undefined>();
-  const [accountingSystem, setAccountingSystem] = useState<string | undefined>();
+  const [year, setYear] = useState<number | undefined>(2025);
+  const [month, setMonth] = useState<number | undefined>(9);
+  const [accountingSystem, setAccountingSystem] = useState<string | undefined>('SOLO');
   const [selectedBanks, setSelectedBanks] = useState<string[]>([]);
-  const [decompYear, setDecompYear] = useState<number | undefined>();
-  const [decompMonth, setDecompMonth] = useState<number | undefined>();
-  const [decompAccounting, setDecompAccounting] = useState<string | undefined>();
+  const [decompYear, setDecompYear] = useState<number | undefined>(2025);
+  const [decompMonth, setDecompMonth] = useState<number | undefined>(9);
+  const [decompAccounting, setDecompAccounting] = useState<string | undefined>('SOLO');
   const [decompositionBank, setDecompositionBank] = useState<string | undefined>();
 
   const { data: periods } = useFinancialPeriods();

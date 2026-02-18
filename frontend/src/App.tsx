@@ -13,6 +13,7 @@ import BankDirectory from './pages/BankDirectory';
 import LiquidityAnalysis from './pages/LiquidityAnalysis';
 import BankComparison from './pages/BankComparison';
 import RiskAnalysis from './pages/RiskAnalysis';
+import PanelRegression from './pages/PanelRegression';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -38,6 +39,7 @@ const App: React.FC = () => {
               <Route path="/liquidity" element={<LiquidityAnalysis />} />
               <Route path="/comparison" element={<BankComparison />} />
               <Route path="/risk" element={<RiskAnalysis />} />
+              <Route path="/panel-regression" element={<PanelRegression />} />
             </Route>
           </Routes>
         </BrowserRouter>

@@ -26,6 +26,32 @@ logger = logging.getLogger(__name__)
 CACHE_TTL = 3600
 
 # Same excluded banks as liquidity analysis
+_STATE_BANKS = {
+    "T.C. Ziraat Bankası A.Ş.",
+    "Türkiye Cumhuriyeti Ziraat Bankası A.Ş.",
+    "Türkiye Halk Bankası A.Ş.",
+    "Türkiye Vakıflar Bankası T.A.O.",
+}
+
+_PRIVATE_BANKS = {
+    "Akbank T.A.Ş.",
+    "Anadolubank A.Ş.",
+    "Fibabanka A.Ş.",
+    "Şekerbank T.A.Ş.",
+    "Turkish Bank A.Ş.",
+    "Türkiye İş Bankası A.Ş.",
+    "Yapı ve Kredi Bankası A.Ş.",
+}
+
+
+def _get_bank_group(name: str) -> str:
+    if name in _STATE_BANKS:
+        return "Kamu"
+    if name in _PRIVATE_BANKS:
+        return "Ozel"
+    return "Yabanci"
+
+
 _EXCLUDED_BANKS = (
     "Türkiye Bankacılık Sistemi",
     " Mevduat Bankaları",
@@ -141,8 +167,11 @@ def _compute_zscore(rows: list[dict], window: int = 12) -> list[dict]:
             roa_window = [bank_rows[j]["roa"] for j in range(start, i + 1)]
 
             if len(roa_window) < 2:
-                r["roa_std"] = None
-                r["z_score"] = None
+                # Not enough periods for std dev — use absolute ROA as proxy
+                # so first-period banks still appear with an approximate Z-Score
+                abs_roa = abs(r["roa"]) if r["roa"] != 0 else 1e-6
+                r["roa_std"] = abs_roa
+                r["z_score"] = (r["capital_ratio"] + r["roa"]) / abs_roa
                 continue
 
             mean_roa = sum(roa_window) / len(roa_window)
@@ -153,7 +182,10 @@ def _compute_zscore(rows: list[dict], window: int = 12) -> list[dict]:
             if std_roa > 0:
                 r["z_score"] = (r["capital_ratio"] + r["roa"]) / std_roa
             else:
-                r["z_score"] = None
+                # All ROAs identical in window — use absolute ROA as fallback
+                abs_roa = abs(r["roa"]) if r["roa"] != 0 else 1e-6
+                r["roa_std"] = abs_roa
+                r["z_score"] = (r["capital_ratio"] + r["roa"]) / abs_roa
 
         results.extend(bank_rows)
 
@@ -266,6 +298,7 @@ async def get_lc_risk_relationship(
             "roa": z["roa"],
             "capital_ratio": z["capital_ratio"],
             "total_assets": z["total_assets"],
+            "bank_group": _get_bank_group(bank_name),
         })
 
     result.sort(key=lambda x: x["z_score"] or 0, reverse=True)

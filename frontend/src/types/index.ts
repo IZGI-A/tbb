@@ -211,4 +211,5 @@ export interface LCRiskRelationship {
   roa: number;
   capital_ratio: number;
   total_assets: number;
+  bank_group: string;
 }

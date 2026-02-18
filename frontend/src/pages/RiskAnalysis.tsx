@@ -14,9 +14,9 @@ import {
 import type { PeriodInfo, ZScoreRanking, ZScoreTimeSeries } from '../types';
 
 const RiskAnalysis: React.FC = () => {
-  const [year, setYear] = useState<number | undefined>();
-  const [month, setMonth] = useState<number | undefined>();
-  const [accountingSystem, setAccountingSystem] = useState<string | undefined>();
+  const [year, setYear] = useState<number | undefined>(2025);
+  const [month, setMonth] = useState<number | undefined>(9);
+  const [accountingSystem, setAccountingSystem] = useState<string | undefined>('SOLO');
   const [selectedBank, setSelectedBank] = useState<string | undefined>();
 
   const { data: periods } = useFinancialPeriods();

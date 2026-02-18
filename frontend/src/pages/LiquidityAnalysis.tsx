@@ -11,9 +11,9 @@ import {
 import type { PeriodInfo, LiquidityCreation, LiquidityGroupTimeSeries } from '../types';
 
 const LiquidityAnalysis: React.FC = () => {
-  const [year, setYear] = useState<number | undefined>();
-  const [month, setMonth] = useState<number | undefined>();
-  const [accountingSystem, setAccountingSystem] = useState<string | undefined>();
+  const [year, setYear] = useState<number | undefined>(2025);
+  const [month, setMonth] = useState<number | undefined>(9);
+  const [accountingSystem, setAccountingSystem] = useState<string | undefined>('SOLO');
   const { data: periods } = useFinancialPeriods();
 
   const periodList = (periods ?? []) as PeriodInfo[];
