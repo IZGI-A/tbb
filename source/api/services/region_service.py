@@ -1,11 +1,12 @@
 """Regional statistics service - queries ClickHouse."""
 
-import json
 import logging
 from decimal import Decimal
 
 import redis.asyncio as aioredis
 from clickhouse_driver import Client
+
+from db.cache import cache_get, cache_set
 
 logger = logging.getLogger(__name__)
 
@@ -20,9 +21,9 @@ async def get_stats(
     year: int | None = None,
 ) -> list[dict]:
     cache_key = f"reg:stats:{region}:{metric}:{year}"
-    cached = await redis.get(cache_key)
+    cached = await cache_get(redis, cache_key)
     if cached:
-        return json.loads(cached)
+        return cached
 
     conditions = []
     params = {}
@@ -57,43 +58,43 @@ async def get_stats(
         for r in rows
     ]
 
-    await redis.setex(cache_key, CACHE_TTL, json.dumps(data, default=str))
+    await cache_set(redis, cache_key, data, CACHE_TTL, default=str)
     return data
 
 
 async def get_regions(ch: Client, redis: aioredis.Redis) -> list[str]:
     cache_key = "reg:list"
-    cached = await redis.get(cache_key)
+    cached = await cache_get(redis, cache_key)
     if cached:
-        return json.loads(cached)
+        return cached
 
     query = "SELECT DISTINCT region FROM tbb.region_statistics FINAL ORDER BY region"
     rows = ch.execute(query)
     data = [r[0] for r in rows]
 
-    await redis.setex(cache_key, CACHE_TTL, json.dumps(data))
+    await cache_set(redis, cache_key, data, CACHE_TTL)
     return data
 
 
 async def get_metrics(ch: Client, redis: aioredis.Redis) -> list[str]:
     cache_key = "reg:metrics"
-    cached = await redis.get(cache_key)
+    cached = await cache_get(redis, cache_key)
     if cached:
-        return json.loads(cached)
+        return cached
 
     query = "SELECT DISTINCT metric FROM tbb.region_statistics FINAL ORDER BY metric"
     rows = ch.execute(query)
     data = [r[0] for r in rows]
 
-    await redis.setex(cache_key, CACHE_TTL, json.dumps(data))
+    await cache_set(redis, cache_key, data, CACHE_TTL)
     return data
 
 
 async def get_periods(ch: Client, redis: aioredis.Redis) -> list[dict]:
     cache_key = "reg:periods"
-    cached = await redis.get(cache_key)
+    cached = await cache_get(redis, cache_key)
     if cached:
-        return json.loads(cached)
+        return cached
 
     query = """
         SELECT DISTINCT year_id
@@ -103,7 +104,7 @@ async def get_periods(ch: Client, redis: aioredis.Redis) -> list[dict]:
     rows = ch.execute(query)
     data = [{"year_id": r[0]} for r in rows]
 
-    await redis.setex(cache_key, CACHE_TTL, json.dumps(data))
+    await cache_set(redis, cache_key, data, CACHE_TTL)
     return data
 
 
@@ -126,9 +127,9 @@ async def get_credit_hhi(
 ) -> list[dict]:
     """Compute HHI and sectoral share breakdown per region."""
     cache_key = f"reg:hhi:{year}"
-    cached = await redis.get(cache_key)
+    cached = await cache_get(redis, cache_key)
     if cached:
-        return json.loads(cached)
+        return cached
 
     query = """
         SELECT region, metric, value
@@ -174,7 +175,7 @@ async def get_credit_hhi(
 
     data.sort(key=lambda x: x["hhi"], reverse=True)
 
-    await redis.setex(cache_key, CACHE_TTL, json.dumps(data, default=str))
+    await cache_set(redis, cache_key, data, CACHE_TTL, default=str)
     return data
 
 
@@ -185,9 +186,9 @@ async def get_loan_deposit_ratio(
 ) -> list[dict]:
     """Compute Loan-to-Deposit ratio per region for a given year."""
     cache_key = f"reg:ldr:{year}"
-    cached = await redis.get(cache_key)
+    cached = await cache_get(redis, cache_key)
     if cached:
-        return json.loads(cached)
+        return cached
 
     query = """
         SELECT
@@ -222,7 +223,7 @@ async def get_loan_deposit_ratio(
         for r in rows
     ]
 
-    await redis.setex(cache_key, CACHE_TTL, json.dumps(data, default=str))
+    await cache_set(redis, cache_key, data, CACHE_TTL, default=str)
     return data
 
 
@@ -233,9 +234,9 @@ async def get_comparison(
     year: int,
 ) -> list[dict]:
     cache_key = f"reg:cmp:{metric}:{year}"
-    cached = await redis.get(cache_key)
+    cached = await cache_get(redis, cache_key)
     if cached:
-        return json.loads(cached)
+        return cached
 
     query = """
         SELECT region, value
@@ -246,5 +247,5 @@ async def get_comparison(
     rows = ch.execute(query, {"metric": metric, "year": year})
     data = [{"region": r[0], "value": float(r[1]) if r[1] else None} for r in rows]
 
-    await redis.setex(cache_key, CACHE_TTL, json.dumps(data, default=str))
+    await cache_set(redis, cache_key, data, CACHE_TTL, default=str)
     return data

@@ -1,10 +1,11 @@
 """Risk center service - queries ClickHouse."""
 
-import json
 import logging
 
 import redis.asyncio as aioredis
 from clickhouse_driver import Client
+
+from db.cache import cache_get, cache_set
 
 logger = logging.getLogger(__name__)
 
@@ -20,9 +21,9 @@ async def get_data(
     month: int | None = None,
 ) -> list[dict]:
     cache_key = f"risk:data:{report_name}:{category}:{year}:{month}"
-    cached = await redis.get(cache_key)
+    cached = await cache_get(redis, cache_key)
     if cached:
-        return json.loads(cached)
+        return cached
 
     conditions = []
     params = {}
@@ -64,29 +65,29 @@ async def get_data(
         for r in rows
     ]
 
-    await redis.setex(cache_key, CACHE_TTL, json.dumps(data, default=str))
+    await cache_set(redis, cache_key, data, CACHE_TTL, default=str)
     return data
 
 
 async def get_reports(ch: Client, redis: aioredis.Redis) -> list[str]:
     cache_key = "risk:reports"
-    cached = await redis.get(cache_key)
+    cached = await cache_get(redis, cache_key)
     if cached:
-        return json.loads(cached)
+        return cached
 
     query = "SELECT DISTINCT report_name FROM tbb.risk_center FINAL ORDER BY report_name"
     rows = ch.execute(query)
     data = [r[0] for r in rows]
 
-    await redis.setex(cache_key, CACHE_TTL, json.dumps(data))
+    await cache_set(redis, cache_key, data, CACHE_TTL)
     return data
 
 
 async def get_periods(ch: Client, redis: aioredis.Redis) -> list[dict]:
     cache_key = "risk:periods"
-    cached = await redis.get(cache_key)
+    cached = await cache_get(redis, cache_key)
     if cached:
-        return json.loads(cached)
+        return cached
 
     query = """
         SELECT DISTINCT year_id, month_id
@@ -96,7 +97,7 @@ async def get_periods(ch: Client, redis: aioredis.Redis) -> list[dict]:
     rows = ch.execute(query)
     data = [{"year_id": r[0], "month_id": r[1]} for r in rows]
 
-    await redis.setex(cache_key, CACHE_TTL, json.dumps(data))
+    await cache_set(redis, cache_key, data, CACHE_TTL)
     return data
 
 
@@ -106,9 +107,9 @@ async def get_categories(
     report_name: str,
 ) -> list[str]:
     cache_key = f"risk:cats:{report_name}"
-    cached = await redis.get(cache_key)
+    cached = await cache_get(redis, cache_key)
     if cached:
-        return json.loads(cached)
+        return cached
 
     query = """
         SELECT DISTINCT category
@@ -119,5 +120,5 @@ async def get_categories(
     rows = ch.execute(query, {"report_name": report_name})
     data = [r[0] for r in rows]
 
-    await redis.setex(cache_key, CACHE_TTL, json.dumps(data))
+    await cache_set(redis, cache_key, data, CACHE_TTL)
     return data

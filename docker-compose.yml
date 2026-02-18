@@ -6,12 +6,12 @@ x-airflow-common: &airflow-common
     dockerfile: docker/airflow/Dockerfile
   env_file: .env
   environment:
-    - PYTHONPATH=/opt/airflow/source
+  - PYTHONPATH=/opt/airflow/source
   volumes:
-    - ./dags:/opt/airflow/dags
-    - ./source:/opt/airflow/source
-    - airflow-logs:/opt/airflow/logs
-    - staging-data:/tmp/tbb_staging
+  - ./dags:/opt/airflow/dags
+  - ./source:/opt/airflow/source
+  - airflow-logs:/opt/airflow/logs
+  - staging-data:/tmp/tbb_staging
   depends_on:
     postgres:
       condition: service_healthy
@@ -24,67 +24,100 @@ services:
   postgres:
     image: postgres:16-alpine
     env_file: .env
+    command:
+    - postgres
+    - -c
+    - checkpoint_timeout=30min
+    - -c
+    - shared_buffers=528MB
     ports:
-      - "5432:5432"
+    - "5432:5432"
     volumes:
-      - postgres-data:/var/lib/postgresql/data
-      - ./docker/postgres/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
+    - postgres-data:/var/lib/postgresql/data
+    - ./docker/postgres/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-tbb_user} -d ${POSTGRES_DB:-tbb}"]
       interval: 10s
       timeout: 5s
       retries: 5
 
+    deploy:
+      resources:
+        limits:
+          memory: 2112m
   clickhouse:
     image: clickhouse/clickhouse-server:24.1
     ports:
-      - "8123:8123"
-      - "9000:9000"
+    - "8123:8123"
+    - "9000:9000"
     volumes:
-      - clickhouse-data:/var/lib/clickhouse
-      - ./docker/clickhouse/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
+    - clickhouse-data:/var/lib/clickhouse
+    - ./docker/clickhouse/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
     healthcheck:
       test: ["CMD", "clickhouse-client", "--query", "SELECT 1"]
       interval: 10s
       timeout: 5s
       retries: 5
 
+    deploy:
+      resources:
+        limits:
+          memory: 3456m
   redis:
     image: redis:7-alpine
     ports:
-      - "6379:6379"
+    - "6379:6379"
     volumes:
-      - redis-data:/data
+    - redis-data:/data
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
 
+    deploy:
+      resources:
+        limits:
+          memory: 704m
+    command:
+    - redis-server
+    - --maxmemory
+    - 633mb
+    - --maxmemory-policy
+    - allkeys-lru
   airflow-webserver:
     <<: *airflow-common
     command: >
       bash -c "
         airflow db migrate &&
-        airflow users create --username admin --password admin --firstname Admin --lastname User --role Admin --email admin@tbb.local || true &&
+        airflow users create --username admin --password admin --firstname Admin --lastname
+      User --role Admin --email admin@tbb.local || true &&
         airflow webserver
       "
     ports:
-      - "8080:8080"
+    - "8080:8080"
     restart: unless-stopped
 
+    deploy:
+      resources:
+        limits:
+          memory: 1728m
   airflow-scheduler:
     <<: *airflow-common
     command: airflow scheduler
     restart: unless-stopped
 
+    deploy:
+      resources:
+        limits:
+          memory: 1408m
   fastapi:
     build:
       context: ./source
       dockerfile: Dockerfile
     env_file: .env
     ports:
-      - "8000:8000"
+    - "8000:8000"
     depends_on:
       postgres:
         condition: service_healthy
@@ -94,16 +127,24 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+    deploy:
+      resources:
+        limits:
+          memory: 1152m
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
     ports:
-      - "3000:80"
+    - "3000:80"
     depends_on:
-      - fastapi
+    - fastapi
     restart: unless-stopped
 
+    deploy:
+      resources:
+        limits:
+          memory: 512m
 volumes:
   postgres-data:
   clickhouse-data:

@@ -441,6 +441,26 @@ veritabanindan ceker ve sonucu TTL suresiyle Redis'e yazar.
 | Bolgesel / Risk verileri | 6 saat | `region:ldr:2024` | Aylik guncellenir |
 | Banka bilgileri | 24 saat | `banks:all` | Nadiren degisir |
 
+### Gzip Sikistirma (Redis Cache)
+
+Cache'e yazilan veriler gzip ile sikistirilarak saklanir. Bu sayede Redis bellek tuketimi %60-85 azalir.
+
+Sikistirma akisi (`db/cache.py`):
+
+```
+YAZMA: json.dumps() → gzip.compress() → base64.b64encode() → redis.setex()
+OKUMA: redis.get() → base64.b64decode() → gzip.decompress() → json.loads()
+```
+
+- **Neden base64?** Redis istemcisi `decode_responses=True` ile calisir (string modu).
+  Gzip ciktisi binary oldugu icin base64 ile ASCII string'e donusturulur.
+- **Esik degeri**: 256 byte'tan kucuk veriler sikistirilmaz (overhead kazanimi asar)
+- **Geriye uyumluluk**: Eski (sikistirilmamis) cache degerleri otomatik taninir.
+  Gzip+base64 verileri `H4sI` ile baslar, duz JSON ise `[` veya `{` ile baslar.
+- **Sikistirma seviyesi**: gzip level 6 (hiz/oran dengesi)
+
+Tum 24 cache fonksiyonu merkezi `cache_get`/`cache_set` yardimcilarini kullanir.
+
 ---
 
 ## 7. Kullanici Etkilesim Noktalari (Frontend)
@@ -637,7 +657,79 @@ Tum degiskenler ortam degiskenleri ile override edilebilir.
 
 ---
 
-## 11. Dizin Yapisi
+## 11. Bellek Yapilandirmasi
+
+Proje 7 Docker container calistirir. Sinirli RAM'e sahip makinelerde bellek tasmasi yasanabilir.
+Bu sorunu onlemek icin otomatik bellek yapilandirma scripti sunulur.
+
+### Otomatik Yapilandirma
+
+`start.sh` scripti makinenin donanim ozelliklerini algilar ve tum sistemi otomatik baslatir:
+
+```bash
+./start.sh              # Varsayilan: toplam RAM'in %80'i
+./start.sh 8g           # Sabit RAM: 8 GB
+./start.sh 60%          # Toplam RAM'in %60'i
+```
+
+Arka planda `scripts/configure_resources.py` calisir. Manuel kullanim:
+
+```bash
+python3 scripts/configure_resources.py --ram 70% --dry-run  # Onizleme
+python3 scripts/configure_resources.py --ram 70%            # Uygula
+docker compose up -d
+```
+
+RAM belirtilmezse kullanilabilir RAM otomatik tespit edilir.
+Remote sunucularda `--ram 70%` onerilen varsayilandir (start.sh bunu kullanir).
+
+| Servis | Kullanilabilir RAM'in Payi | Minimum |
+|--------|---------------------------|---------|
+| clickhouse | %30 | 1536 MB |
+| postgres | %18 | 256 MB |
+| airflow-webserver | %15 | 512 MB |
+| airflow-scheduler | %12 | 384 MB |
+| fastapi | %10 | 256 MB |
+| redis | %6 | 64 MB |
+| frontend | %4 | 64 MB |
+
+Kullanilabilir RAM yetersizse script uyari verir.
+
+### Ek Yapilandirmalar
+
+Script asagidaki optimizasyonlari da otomatik uygular:
+
+**PostgreSQL**:
+- `shared_buffers`: Container limitinin %25'i (varsayilan 128 MB yerine)
+- `checkpoint_timeout`: 30 dakika (varsayilan 5 dakika yerine)
+
+**Redis**:
+- `maxmemory`: Container limitinin %90'i
+- `maxmemory-policy`: `allkeys-lru` (bellek dolunca en az kullanilan key silinir)
+
+### Ornek Cikti (16 GB makine, 8 GB bos)
+
+```
+Total RAM     : 16.0 GB
+Used (OS+apps): 8.0 GB
+Available     : 8.0 GB
+
+Service                   Limit
+--------------------------------
+  postgres                1472m
+  clickhouse              2496m
+  redis                    512m
+  airflow-webserver       1280m
+  airflow-scheduler        960m
+  fastapi                  832m
+  frontend                 320m
+--------------------------------
+  Docker total            7872m  (7.7 GB / 8.0 GB available)
+```
+
+---
+
+## 12. Dizin Yapisi
 
 ```
 tbb/
@@ -678,6 +770,14 @@ tbb/
 │   │   ├── region_scraper.py
 │   │   └── risk_center_scraper.py
 │   └── db/                        # Veritabani baglanti yardimcilari
+│       ├── redis.py               # Async Redis istemcisi
+│       ├── postgres.py            # AsyncPG connection pool
+│       ├── clickhouse.py          # ClickHouse native istemci
+│       └── cache.py               # Gzip sikistirmali cache yardimcilari
+├── scripts/
+│   ├── configure_resources.py     # Bellek otomatik yapilandirma
+│   └── requirements.txt           # Script bagimliliklari (psutil, ruamel.yaml)
+├── start.sh                       # Tek komutla otomatik kurulum ve baslatma
 ├── ARCHITECTURE.md
 ├── ENDPOINTS.md
 └── DASHBOARD_ANALYSES.md

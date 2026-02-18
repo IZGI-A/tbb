@@ -7,31 +7,45 @@ Turkiye Bankalar Birligi (TBB) kamuya acik verilerini toplayan, isleyen ve gorse
 - TBB web sitelerinden otomatik veri toplama (Selenium)
 - 4 Airflow DAG ile zamanlanmis ETL pipeline'lari
 - PostgreSQL (yapisal veri) + ClickHouse (analitik veri) ikili veritabani mimarisi
-- FastAPI ile 27 REST endpoint (Redis cache)
+- FastAPI ile 27 REST endpoint (Redis cache + gzip sikistirma)
 - React dashboard: finansal oranlar, bolgesel analizler, risk merkezi, banka rehberi
+- Donanim altyapisina gore otomatik bellek yapilandirmasi
 
 ## Onkosullar
 
 - [Docker](https://docs.docker.com/get-docker/) ve [Docker Compose](https://docs.docker.com/compose/install/)
-- En az **4 GB** bos RAM (ClickHouse + Airflow + Chrome bellek kullanimi)
+- [Python 3.9+](https://www.python.org/downloads/) (bellek yapilandirma scripti icin)
+- En az **4 GB** bos RAM (ClickHouse min. 1.5 GB gerektirir)
 - Portlar: 3000, 5432, 6379, 8000, 8080, 8123, 9000
 
-## Kurulum
-
-### 1. Repoyu klonla
+## Hizli Kurulum
 
 ```bash
 git clone <repo-url>
 cd tbb
+cp .env.example .env       # Ortam degiskenlerini ayarla (asagiya bak)
+./start.sh                 # Otomatik yapilandirma + baslatma
 ```
 
-### 2. Ortam degiskenlerini ayarla
+Bu kadar. `start.sh` geri kalan her seyi otomatik halleder:
+1. Python bagimliliklerini kurar (psutil, ruamel.yaml)
+2. Makinenin RAM'ini tespit eder 
+3. Her servise uygun bellek limiti atar (Redis maxmemory, PostgreSQL shared_buffers dahil)
+4. Docker servislerini baslatir
+
+### RAM Secenekleri
 
 ```bash
-cp .env.example .env
+./start.sh                 # Varsayilan: toplam RAM'in %70'i (sunucu icin onerilen)
+./start.sh 8g              # Sabit ram: 8 GB
+./start.sh 60%             # Toplam RAM'in %60'i (lokal gelistirme icin onerilen)
+./start.sh --build         # Image'lari yeniden build et
+./start.sh 8g --build      # RAM + build birlikte
 ```
 
-`.env` dosyasini ac ve asagidaki alanlari doldur:
+### Ortam Degiskenleri
+
+`cp .env.example .env` ile olusturulan `.env` dosyasinda asagidaki alanlari doldur:
 
 ```
 POSTGRES_PASSWORD=tbb_secure_pass_123
@@ -45,29 +59,29 @@ Fernet key uretmek icin:
 python3 -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
 ```
 
-### 3. Tum servisleri baslat
+### Manuel Kurulum
+
+Adim adim kontrol etmek istiyorsaniz:
 
 ```bash
+# 1. Ortam degiskenleri
+cp .env.example .env
+
+# 2. Bellek yapilandirmasi
+pip3 install -r scripts/requirements.txt
+python3 scripts/configure_resources.py --ram 70% --dry-run   # Onizleme
+python3 scripts/configure_resources.py --ram 70%             # Uygula
+
+# 3. Servisleri baslat
 docker compose up -d --build
 ```
 
-Ilk seferde image'lar build edilir (~5 dk). Tamamlandigini kontrol et:
+### Kurulumu Dogrula
 
 ```bash
-docker compose ps
+docker compose ps                     # 7 servis running/healthy olmali
+docker compose logs -f fastapi        # "Uvicorn running on http://0.0.0.0:8000" mesajini bekle
 ```
-
-7 servisin tumu `running` (veya `healthy`) gorunmelidir.
-
-### 4. Servislerin hazir olmasini bekle
-
-Veritabanlari saglik kontrolu gecene kadar diger servisler baslamaz. Loglardan takip:
-
-```bash
-docker compose logs -f fastapi
-```
-
-`Uvicorn running on http://0.0.0.0:8000` mesajini gordugunde API hazir.
 
 ## Erisim Adresleri
 
@@ -83,7 +97,7 @@ Airflow giris bilgileri: `admin` / `admin`
 
 ## Veri Toplama (Ilk Calistirma)
 
-Kurulumdan sonra veritabanlari bos gelir. Verileri toplamak icin Airflow DAG'larini manuel tetikle:
+Kurulumdan sonra veritabanlari bos gelir. Verileri toplamak icin Airflow DAG'larini tetikle:
 
 ### Airflow Web UI uzerinden
 
@@ -102,7 +116,7 @@ docker compose exec airflow-webserver airflow dags trigger tbb_bank_info
 docker compose exec airflow-webserver airflow dags unpause tbb_financial_statements
 docker compose exec airflow-webserver airflow dags trigger tbb_financial_statements
 
-# Bolgesel istatistikler 
+# Bolgesel istatistikler
 docker compose exec airflow-webserver airflow dags unpause tbb_region_statistics
 docker compose exec airflow-webserver airflow dags trigger tbb_region_statistics
 
@@ -111,7 +125,7 @@ docker compose exec airflow-webserver airflow dags unpause tbb_risk_center
 docker compose exec airflow-webserver airflow dags trigger tbb_risk_center
 ```
 
-DAG durumlarini Airflow UI'dan veya komut satirindan takip edebilirsin:
+DAG durumlarini takip et:
 
 ```bash
 docker compose exec airflow-webserver airflow dags list-runs -d tbb_financial_statements
@@ -119,20 +133,11 @@ docker compose exec airflow-webserver airflow dags list-runs -d tbb_financial_st
 
 ## Yeniden Build
 
-Kod degisikliginden sonra ilgili servisi yeniden build et:
-
 ```bash
-# Sadece backend
-docker compose up -d --build fastapi
-
-# Sadece frontend
-docker compose up -d --build frontend
-
-# Her ikisi birden
-docker compose up -d --build fastapi frontend
-
-# Tum servisler
-docker compose up -d --build
+./start.sh --build                           # Tum servisler (bellek yeniden yapilandirilir)
+docker compose up -d --build fastapi         # Sadece backend
+docker compose up -d --build frontend        # Sadece frontend
+docker compose up -d --build fastapi frontend  # Her ikisi
 ```
 
 ## Faydali Komutlar
@@ -154,6 +159,9 @@ docker compose exec clickhouse clickhouse-client --query "SELECT count() FROM tb
 # PostgreSQL'e baglan
 docker compose exec postgres psql -U tbb_user -d tbb
 
+# Bellek yapilandirmasini onizle
+python3 scripts/configure_resources.py --ram 70% --dry-run
+
 # Tum servisleri durdur
 docker compose down
 
@@ -165,39 +173,46 @@ docker compose down -v
 
 ```
 tbb/
-├── dags/                    # Airflow DAG tanimlari (4 pipeline)
+├── start.sh                    # Otomatik kurulum ve baslatma scripti
+├── docker-compose.yml          # 7 servis tanimlamasi + bellek limitleri
+├── .env.example                # Ortam degiskenleri sablonu
+├── dags/                       # Airflow DAG tanimlari (4 pipeline)
 ├── docker/
-│   ├── airflow/Dockerfile   # Airflow + Chrome + Python deps
+│   ├── airflow/Dockerfile      # Airflow + Chrome + Python deps
 │   ├── clickhouse/init-db.sql
 │   └── postgres/init-db.sql
-├── docker-compose.yml
-├── frontend/                # React + TypeScript + Ant Design
+├── frontend/                   # React + TypeScript + Ant Design
 │   ├── src/
-│   │   ├── pages/           # 5 sayfa (Dashboard, Financial, ...)
-│   │   ├── hooks/           # TanStack Query hooklari
-│   │   ├── components/      # Chart bilesenleri (Line, Bar, Pie)
-│   │   └── api/client.ts    # Axios API istemcisi
+│   │   ├── pages/              # 5 sayfa (Dashboard, Financial, ...)
+│   │   ├── hooks/              # TanStack Query hooklari
+│   │   ├── components/         # Chart bilesenleri (Line, Bar, Pie)
+│   │   └── api/client.ts       # Axios API istemcisi
 │   └── Dockerfile
-├── source/                  # Python backend + scrapers + ETL
-│   ├── api/                 # FastAPI (routers + services)
-│   ├── scrapers/            # 4 Selenium scraper
-│   ├── etl/                 # Transformer + Loader
+├── source/                     # Python backend + scrapers + ETL
+│   ├── api/                    # FastAPI (routers + services)
+│   ├── db/cache.py             # Gzip sikistirmali Redis cache
+│   ├── scrapers/               # 4 Selenium scraper
+│   ├── etl/                    # Transformer + Loader
 │   ├── config.py
 │   └── Dockerfile
-├── .env.example
-├── ARCHITECTURE.md          # Detayli sistem mimarisi
-├── ENDPOINTS.md             # Tum API endpoint dokumantasyonu
-└── DASHBOARD_ANALYSES.md    # Dashboard analiz aciklamalari
+├── scripts/
+│   ├── configure_resources.py  # Bellek otomatik yapilandirma
+│   └── requirements.txt        # Script bagimliliklari
+└── documents/
+    ├── ARCHITECTURE.md         # Sistem mimarisi ve veri akisi
+    ├── ENDPOINTS.md            # 27 API endpoint dokumantasyonu
+    └── DASHBOARD_ANALYSES.md   # Dashboard analiz aciklamalari
 ```
 
 ## Dokumantasyon
-Dokümanlar /documents klasörü altında yer almaktadır.
+
+Dokumanlar `documents/` klasoru altinda yer almaktadir.
 
 | Dosya | Icerik |
 |-------|--------|
-| [ARCHITECTURE.md](ARCHITECTURE.md) | Sistem mimarisi, veri akisi, veritabani semalari, servis iletisimi |
-| [ENDPOINTS.md](ENDPOINTS.md) | 27 API endpoint - parametreler, ornek yanitlar |
-| [DASHBOARD_ANALYSES.md](DASHBOARD_ANALYSES.md) | Dashboard grafik/analiz aciklamalari, SQL sorgulari, formuller |
+| [ARCHITECTURE.md](documents/ARCHITECTURE.md) | Sistem mimarisi, veri akisi, veritabani semalari, servis iletisimi |
+| [ENDPOINTS.md](documents/ENDPOINTS.md) | 27 API endpoint - parametreler, ornek yanitlar |
+| [DASHBOARD_ANALYSES.md](documents/DASHBOARD_ANALYSES.md) | Dashboard grafik/analiz aciklamalari, SQL sorgulari, formuller |
 
 ## Veritabani Semalari
 

@@ -19,7 +19,7 @@ const PieChart: React.FC<PieChartProps> = ({ title, data, loading, donut = false
       trigger: 'item',
       formatter: '{b}: {c} ({d}%)',
     },
-    legend: {
+    legend: donut ? { show: false } : {
       orient: 'vertical',
       left: 'left',
     },

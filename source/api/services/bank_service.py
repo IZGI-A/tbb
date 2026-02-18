@@ -1,10 +1,11 @@
 """Bank information service - queries PostgreSQL."""
 
-import json
 import logging
 
 import asyncpg
 import redis.asyncio as aioredis
+
+from db.cache import cache_get, cache_set
 
 logger = logging.getLogger(__name__)
 
@@ -13,9 +14,9 @@ CACHE_TTL = 86400  # 24 hours
 
 async def get_banks(pool: asyncpg.Pool, redis: aioredis.Redis) -> list[dict]:
     cache_key = "banks:list"
-    cached = await redis.get(cache_key)
+    cached = await cache_get(redis, cache_key)
     if cached:
-        return json.loads(cached)
+        return cached
 
     async with pool.acquire() as conn:
         rows = await conn.fetch(
@@ -29,7 +30,7 @@ async def get_banks(pool: asyncpg.Pool, redis: aioredis.Redis) -> list[dict]:
             if hasattr(v, "isoformat"):
                 d[k] = v.isoformat()
 
-    await redis.setex(cache_key, CACHE_TTL, json.dumps(data))
+    await cache_set(redis, cache_key, data, CACHE_TTL)
     return data
 
 
@@ -40,9 +41,9 @@ async def get_branches(
     city: str | None = None,
 ) -> list[dict]:
     cache_key = f"banks:branches:{bank_name}:{city}"
-    cached = await redis.get(cache_key)
+    cached = await cache_get(redis, cache_key)
     if cached:
-        return json.loads(cached)
+        return cached
 
     async with pool.acquire() as conn:
         if city:
@@ -62,7 +63,7 @@ async def get_branches(
             if hasattr(v, "isoformat"):
                 d[k] = v.isoformat()
 
-    await redis.setex(cache_key, CACHE_TTL, json.dumps(data))
+    await cache_set(redis, cache_key, data, CACHE_TTL)
     return data
 
 
@@ -73,9 +74,9 @@ async def get_atms(
     city: str | None = None,
 ) -> list[dict]:
     cache_key = f"banks:atms:{bank_name}:{city}"
-    cached = await redis.get(cache_key)
+    cached = await cache_get(redis, cache_key)
     if cached:
-        return json.loads(cached)
+        return cached
 
     async with pool.acquire() as conn:
         if city:
@@ -95,7 +96,7 @@ async def get_atms(
             if hasattr(v, "isoformat"):
                 d[k] = v.isoformat()
 
-    await redis.setex(cache_key, CACHE_TTL, json.dumps(data))
+    await cache_set(redis, cache_key, data, CACHE_TTL)
     return data
 
 
@@ -105,9 +106,9 @@ async def get_history(
     bank_name: str,
 ) -> dict | None:
     cache_key = f"banks:history:{bank_name}"
-    cached = await redis.get(cache_key)
+    cached = await cache_get(redis, cache_key)
     if cached:
-        return json.loads(cached)
+        return cached
 
     async with pool.acquire() as conn:
         row = await conn.fetchrow(
@@ -123,7 +124,7 @@ async def get_history(
         if hasattr(v, "isoformat"):
             data[k] = v.isoformat()
 
-    await redis.setex(cache_key, CACHE_TTL, json.dumps(data))
+    await cache_set(redis, cache_key, data, CACHE_TTL)
     return data
 
 
@@ -153,9 +154,9 @@ async def get_dashboard_stats(
 ) -> dict:
     """Aggregated statistics for the main dashboard."""
     cache_key = "banks:dashboard_stats"
-    cached = await redis.get(cache_key)
+    cached = await cache_get(redis, cache_key)
     if cached:
-        return json.loads(cached)
+        return cached
 
     async with pool.acquire() as conn:
         branch_total = await conn.fetchval("SELECT COUNT(*) FROM branch_info")
@@ -177,5 +178,5 @@ async def get_dashboard_stats(
         "atm_by_city": [{"city": r["city"], "count": r["count"]} for r in atm_rows],
     }
 
-    await redis.setex(cache_key, CACHE_TTL, json.dumps(data))
+    await cache_set(redis, cache_key, data, CACHE_TTL)
     return data
