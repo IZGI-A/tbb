@@ -9,3 +9,4 @@ frontend/dist
 *.log
 .DS_Store
 study.md
+ETL_PIPELINE.md
