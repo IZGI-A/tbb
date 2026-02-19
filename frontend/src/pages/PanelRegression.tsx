@@ -246,23 +246,6 @@ const PanelRegression: React.FC = () => {
             </Col>
           </Row>
 
-          {/* Descriptive Stats */}
-          <Card title="Tanimlayici Istatistikler" style={{ marginBottom: 16 }}>
-            <Table
-              columns={descColumns}
-              dataSource={Object.entries(data.descriptive_stats).map(([k, v]) => ({
-                variable: k,
-                ...v,
-              }))}
-              rowKey="variable"
-              pagination={false}
-              size="small"
-            />
-          </Card>
-
-          {/* Regression Models */}
-          {Object.entries(data.models).map(([key, model]) => renderModel(key, model))}
-
           {/* Scatter: Capital Adequacy vs LC */}
           {data.bank_data && data.bank_data.length > 0 && (
             <Card title="Sermaye Yeterliligi vs LC Orani (2025/9)" style={{ marginBottom: 16 }}>
@@ -280,6 +263,23 @@ const PanelRegression: React.FC = () => {
               />
             </Card>
           )}
+
+          {/* Descriptive Stats */}
+          <Card title="Tanimlayici Istatistikler" style={{ marginBottom: 16 }}>
+            <Table
+              columns={descColumns}
+              dataSource={Object.entries(data.descriptive_stats).map(([k, v]) => ({
+                variable: k,
+                ...v,
+              }))}
+              rowKey="variable"
+              pagination={false}
+              size="small"
+            />
+          </Card>
+
+          {/* Regression Models */}
+          {Object.entries(data.models).map(([key, model]) => renderModel(key, model))}
         </>
       )}
     </div>
