@@ -18,6 +18,8 @@ interface ModelResult {
   title: string;
   dependent: string;
   method: string;
+  equation?: string;
+  fixed_effects?: string;
   coefficients?: Coefficient[];
   r_squared?: number;
   adj_r_squared?: number;
@@ -62,11 +64,17 @@ interface PanelResult {
 
 const VARIABLE_LABELS: Record<string, string> = {
   capital_adequacy: 'Sermaye Yeterliligi',
+  L_capital_adequacy: 'Sermaye Yeterliligi (t-1)',
   bank_size: 'Banka Buyuklugu (ln)',
+  L_bank_size: 'Banka Buyuklugu (t-1)',
   roa: 'ROA',
+  L_roa: 'ROA (t-1)',
   lc_nonfat: 'LC (Cat Nonfat)',
+  L_lc_nonfat: 'LC (t-1)',
   state: 'Kamu Sahipligi',
   z_score: 'Z-Score',
+  competition: 'Rekabet (1/HHI)',
+  L_competition: 'Rekabet (t-1)',
   Sabit: 'Sabit',
 };
 
@@ -77,6 +85,7 @@ const STAT_LABELS: Record<string, string> = {
   roa: 'ROA',
   bank_size: 'Banka Buyuklugu (ln)',
   state: 'Kamu Sahipligi',
+  competition: 'Rekabet (1/HHI)',
 };
 
 const PanelRegression: React.FC = () => {
@@ -153,6 +162,8 @@ const PanelRegression: React.FC = () => {
     { title: 'N', dataIndex: 'count', key: 'count' },
   ];
 
+  const latestPeriod = data?.panel_info.periods[data.panel_info.periods.length - 1]?.replace('_', '/');
+
   const renderModel = (key: string, model: ModelResult) => (
     <Card
       key={key}
@@ -160,6 +171,9 @@ const PanelRegression: React.FC = () => {
         <span>
           {model.title}{' '}
           <Tag color="blue">{model.method}</Tag>
+          {model.fixed_effects && (
+            <Tag color="purple">FE: {model.fixed_effects}</Tag>
+          )}
         </span>
       }
       style={{ marginBottom: 16 }}
@@ -168,6 +182,18 @@ const PanelRegression: React.FC = () => {
         <Alert type="warning" message={model.error} />
       ) : (
         <>
+          {model.equation && (
+            <div style={{
+              background: '#f5f5f5',
+              padding: '8px 12px',
+              marginBottom: 12,
+              borderRadius: 4,
+              fontFamily: 'monospace',
+              fontSize: 13,
+            }}>
+              {model.equation}
+            </div>
+          )}
           <Descriptions size="small" column={4} style={{ marginBottom: 16 }}>
             <Descriptions.Item label="Bagimli Degisken">{model.dependent}</Descriptions.Item>
             <Descriptions.Item label="R²">{model.r_squared?.toFixed(4)}</Descriptions.Item>
@@ -242,13 +268,13 @@ const PanelRegression: React.FC = () => {
               <Card><Statistic title="Toplam Gozlem" value={data.panel_info.total_obs} /></Card>
             </Col>
             <Col flex={1}>
-              <Card><Statistic title="Donemler" value={data.panel_info.periods.join(', ')} /></Card>
+              <Card><Statistic title="Donemler" value={data.panel_info.periods.map(p => p.replace('_', '/')).join(', ')} /></Card>
             </Col>
           </Row>
 
           {/* Scatter: Capital Adequacy vs LC */}
           {data.bank_data && data.bank_data.length > 0 && (
-            <Card title="Sermaye Yeterliligi vs LC Orani (2025/9)" style={{ marginBottom: 16 }}>
+            <Card title={`Sermaye Yeterliligi vs LC Orani (${latestPeriod})`} style={{ marginBottom: 16 }}>
               <ScatterChart
                 title=""
                 xLabel="Sermaye Yeterliligi (%)"
