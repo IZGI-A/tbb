@@ -2,7 +2,7 @@
 
 Base URL: `http://localhost:3000/api` (Nginx proxy) veya `http://localhost:8000/api` (dogrudan FastAPI)
 
-Toplam **28 endpoint** - tumu GET metodu kullanir.
+Toplam **38 endpoint** - tumu GET metodu kullanir.
 
 ---
 
@@ -575,6 +575,382 @@ Belirli bir bankanin kurulus tarihi ve tarihce bilgisini getirir.
 
 ---
 
+## Liquidity (Likidite Analizi)
+
+Prefix: `/api/liquidity`
+Veri Kaynagi: ClickHouse `tbb.financial_statements` + PostgreSQL `bank_info`
+Cache TTL: 1 saat
+Metodoloji: Colak, Deniz, Korkmaz & Yilmaz (2024), "A Panorama of Liquidity Creation in Turkish Banking Industry", TCMB Working Paper 24/09
+
+### `GET /api/liquidity/creation`
+
+Belirli bir donem icin banka bazinda likidite yaratimi (LC) oranlarini hesaplar. Kalkinma/yatirim bankalari ve sektor aggregate satirlari haric tutulur.
+
+| Parametre | Tip | Zorunlu | Varsayilan | Aciklama |
+|-----------|-----|---------|-----------|----------|
+| year | int | Evet | - | Yil |
+| month | int | Evet | - | Ay |
+| accounting_system | string | Hayir | - | Muhasebe sistemi (SOLO, KONSOLİDE). Bos ise SOLO tercih edilir, sadece konsolide verisi olan bankalar icin KONSOLİDE kullanilir |
+
+**LC Hesaplama Formulu (Cat Nonfat - bilanco ici)**:
+```
+LC_nonfat = [0.5*(Likit Olmayan Varliklar + Likit Yukumlulukler) + 0.0*(Yari Likit) - 0.5*(Likit Varliklar + Likit Olmayan Yuk. + Ozkaynak)] / Toplam Aktif
+```
+
+**LC Hesaplama Formulu (Cat Fat - bilanco disi dahil)**:
+```
+LC_fat = LC_nonfat_numerator + 0.5*(Likit Olmayan Nazim Hesaplar) / Toplam Aktif
+```
+
+**Yanit**:
+```json
+[
+  {
+    "bank_name": "Akbank T.A.S.",
+    "lc_nonfat": 0.3245,
+    "lc_fat": 0.2890,
+    "lc_ratio": 0.3245,
+    "liquid_assets": 150000000000,
+    "semi_liquid_assets": 25000000000,
+    "illiquid_assets": 800000000000,
+    "liquid_liabilities": 600000000000,
+    "semi_liquid_liabilities": 30000000000,
+    "illiquid_liabilities_equity": 200000000000,
+    "illiquid_obs": 120000000000,
+    "semi_liquid_obs": 50000000000,
+    "total_assets": 1250000000000
+  }
+]
+```
+
+---
+
+### `GET /api/liquidity/time-series`
+
+LC zaman serisi. Banka adi verilmezse sektor agirlikli ortalamasini dondurur.
+
+| Parametre | Tip | Zorunlu | Varsayilan | Aciklama |
+|-----------|-----|---------|-----------|----------|
+| bank_name | string | Hayir | - | Banka adi (bos ise sektor ortalamasi) |
+| from_year | int | Hayir | - | Baslangic yili |
+| to_year | int | Hayir | - | Bitis yili |
+| accounting_system | string | Hayir | - | Muhasebe sistemi |
+
+**Yanit**:
+```json
+[
+  { "year_id": 2025, "month_id": 3, "lc_nonfat": 0.3120, "lc_fat": 0.2780, "lc_ratio": 0.3120 },
+  { "year_id": 2025, "month_id": 6, "lc_nonfat": 0.3180, "lc_fat": 0.2830, "lc_ratio": 0.3180 },
+  { "year_id": 2025, "month_id": 9, "lc_nonfat": 0.3245, "lc_fat": 0.2890, "lc_ratio": 0.3245 }
+]
+```
+
+---
+
+### `GET /api/liquidity/groups`
+
+Banka sahiplik grubuna gore agirlikli ortalama LC orani.
+
+| Parametre | Tip | Zorunlu | Varsayilan | Aciklama |
+|-----------|-----|---------|-----------|----------|
+| year | int | Evet | - | Yil |
+| month | int | Evet | - | Ay |
+| accounting_system | string | Hayir | - | Muhasebe sistemi |
+
+**Yanit**:
+```json
+[
+  { "group_name": "Kamusal Sermayeli Mevduat Bankalari", "lc_nonfat": 0.2850, "lc_fat": 0.2500, "lc_ratio": 0.2850, "bank_count": 3 },
+  { "group_name": "Ozel Sermayeli Mevduat Bankalari", "lc_nonfat": 0.3100, "lc_fat": 0.2750, "lc_ratio": 0.3100, "bank_count": 7 }
+]
+```
+
+---
+
+### `GET /api/liquidity/group-time-series`
+
+Grup bazli (Kamusal / Ozel / Yabanci) LC zaman serisi. Colak et al. (2024) Figure 2 icin.
+
+| Parametre | Tip | Zorunlu | Varsayilan | Aciklama |
+|-----------|-----|---------|-----------|----------|
+| accounting_system | string | Hayir | - | Muhasebe sistemi |
+
+**Yanit**:
+```json
+[
+  { "group_name": "Kamusal", "year_id": 2025, "month_id": 9, "lc_nonfat": 0.2850 },
+  { "group_name": "Ozel", "year_id": 2025, "month_id": 9, "lc_nonfat": 0.3100 },
+  { "group_name": "Yabanci", "year_id": 2025, "month_id": 9, "lc_nonfat": 0.2200 }
+]
+```
+
+---
+
+### `GET /api/liquidity/decomposition`
+
+Tek bir banka icin LC bilesen analizi. Pozitif katki yapan (likit olmayan varliklar, likit yukumlulukler) ve negatif katki yapan (likit varliklar, likit olmayan yuk. + ozkaynak) bilesenleri ayristirir.
+
+| Parametre | Tip | Zorunlu | Varsayilan | Aciklama |
+|-----------|-----|---------|-----------|----------|
+| bank_name | string | Evet | - | Banka adi |
+| year | int | Evet | - | Yil |
+| month | int | Evet | - | Ay |
+| accounting_system | string | Hayir | - | Muhasebe sistemi |
+
+**Yanit**:
+```json
+{
+  "bank_name": "Akbank T.A.S.",
+  "lc_nonfat": 0.3245,
+  "lc_fat": 0.2890,
+  "lc_ratio": 0.3245,
+  "total_assets": 1250000000000,
+  "components": {
+    "liquid_assets": 150000000000,
+    "semi_liquid_assets": 25000000000,
+    "illiquid_assets": 800000000000,
+    "liquid_liabilities": 600000000000,
+    "semi_liquid_liabilities": 30000000000,
+    "illiquid_liabilities_equity": 200000000000,
+    "illiquid_obs": 120000000000,
+    "semi_liquid_obs": 50000000000
+  },
+  "weighted_components": {
+    "illiquid_assets_contrib": 0.3200,
+    "liquid_liabilities_contrib": 0.2400,
+    "liquid_assets_drag": -0.0600,
+    "illiquid_liab_equity_drag": -0.0800,
+    "illiquid_obs_contrib": 0.0480
+  }
+}
+```
+
+---
+
+## Risk Analysis (Risk Analizi)
+
+Prefix: `/api/risk-analysis`
+Veri Kaynagi: ClickHouse `tbb.financial_statements`
+Cache TTL: 1 saat
+Metodoloji: Colak et al. (2024), Section IV.III "Bank Risk"
+
+### `GET /api/risk-analysis/zscore`
+
+Belirli bir donem icin tum bankalarin Z-Score siralamasi.
+
+| Parametre | Tip | Zorunlu | Varsayilan | Aciklama |
+|-----------|-----|---------|-----------|----------|
+| year | int | Evet | - | Yil |
+| month | int | Evet | - | Ay |
+| accounting_system | string | Hayir | - | Muhasebe sistemi (varsayilan SOLO) |
+
+**Z-Score Hesaplama**:
+```
+Z-Score = (Sermaye Orani + ROA) / sigma(ROA)
+
+Sermaye Orani = Ozkaynaklar / Toplam Aktif
+ROA = Net Kar / Toplam Aktif
+sigma(ROA) = 12 donemlik yuvarlanir pencere standart sapma
+```
+Yuksek Z-Score = dusuk risk (iflastan uzak mesafe).
+
+**Yanit**:
+```json
+[
+  {
+    "bank_name": "Akbank T.A.S.",
+    "z_score": 45.6789,
+    "roa": 1.85,
+    "capital_ratio": 12.50,
+    "roa_std": 0.3125,
+    "total_assets": 1250000000000,
+    "equity": 156250000000,
+    "net_income": 23125000000
+  }
+]
+```
+
+---
+
+### `GET /api/risk-analysis/zscore-time-series`
+
+Z-Score zaman serisi. Banka adi verilmezse tum bankalarin serisini dondurur.
+
+| Parametre | Tip | Zorunlu | Varsayilan | Aciklama |
+|-----------|-----|---------|-----------|----------|
+| bank_name | string | Hayir | - | Banka adi (bos ise tum bankalar) |
+| accounting_system | string | Hayir | - | Muhasebe sistemi |
+
+**Yanit**:
+```json
+[
+  { "bank_name": "Akbank T.A.S.", "year_id": 2025, "month_id": 9, "z_score": 45.67, "roa": 1.85, "capital_ratio": 12.50 }
+]
+```
+
+---
+
+### `GET /api/risk-analysis/lc-risk`
+
+Likidite yaratimi (LC) ile banka riski (Z-Score) arasindaki iliskiyi gosteren veri. Sacilim grafigi icin kullanilir.
+
+| Parametre | Tip | Zorunlu | Varsayilan | Aciklama |
+|-----------|-----|---------|-----------|----------|
+| year | int | Evet | - | Yil |
+| month | int | Evet | - | Ay |
+| accounting_system | string | Hayir | - | Muhasebe sistemi |
+
+**Yanit**:
+```json
+[
+  {
+    "bank_name": "Akbank T.A.S.",
+    "z_score": 45.67,
+    "lc_nonfat": 0.3245,
+    "roa": 1.85,
+    "capital_ratio": 12.50,
+    "total_assets": 1250000000000,
+    "bank_group": "Ozel"
+  }
+]
+```
+
+---
+
+## Panel Regression (Panel Regresyon)
+
+Prefix: `/api/panel-regression`
+Veri Kaynagi: ClickHouse `tbb.financial_statements`
+Cache TTL: 1 saat
+Metodoloji: Colak et al. (2024) - Cross-sectional OLS (2025/9 donemi)
+
+### `GET /api/panel-regression/results`
+
+Uc regresyon modelinin sonuclarini, tanimlayici istatistikleri ve banka bazli verileri dondurur.
+
+| Parametre | Tip | Zorunlu | Varsayilan | Aciklama |
+|-----------|-----|---------|-----------|----------|
+| accounting_system | string | Hayir | - | Muhasebe sistemi |
+
+**Modeller**:
+
+| Model | Bagimli Degisken | Bagimsiz Degiskenler | Denklem |
+|-------|-------------------|---------------------|---------|
+| capital_adequacy_lc | LC (Cat Nonfat) | Sermaye Yeterliligi, Banka Buyuklugu (ln), ROA | Eq. 2 |
+| lc_bank_risk | Z-Score (Risk) | LC Orani, Banka Buyuklugu (ln), ROA | Eq. 5 |
+| state_ownership_lc | LC (Cat Nonfat) | Kamu Sahipligi (dummy), Banka Buyuklugu (ln), ROA | Eq. 4 |
+
+**Degisken Tanimlari**:
+- `capital_adequacy`: Ozkaynak / Toplam Aktif - 0.08 (%8 esik degeri uzerindeki fazla)
+- `bank_size`: ln(Toplam Aktif)
+- `state`: Kamu bankasi = 1, diger = 0
+
+**Yanit**:
+```json
+{
+  "models": {
+    "capital_adequacy_lc": {
+      "title": "Sermaye Yeterliligi → Likidite Yaratimi (Eq. 2)",
+      "dependent": "LC (Cat Nonfat)",
+      "method": "OLS",
+      "r_squared": 0.45,
+      "adj_r_squared": 0.39,
+      "n_obs": 33,
+      "f_stat": 7.85,
+      "f_pvalue": 0.0005,
+      "coefficients": [
+        {
+          "variable": "Sabit",
+          "coefficient": 0.8500,
+          "std_error": 0.3200,
+          "t_stat": 2.65,
+          "p_value": 0.013,
+          "significant": true
+        },
+        {
+          "variable": "capital_adequacy",
+          "coefficient": -0.0023,
+          "std_error": 0.001,
+          "t_stat": -2.30,
+          "p_value": 0.027,
+          "significant": true
+        }
+      ]
+    }
+  },
+  "descriptive_stats": {
+    "lc_nonfat": { "mean": 0.25, "std": 0.08, "min": 0.05, "max": 0.42, "count": 33 }
+  },
+  "panel_info": {
+    "n_banks": 33,
+    "n_periods": 1,
+    "total_obs": 33,
+    "periods": ["2025_9"]
+  },
+  "bank_data": [
+    {
+      "bank_name": "Akbank T.A.S.",
+      "capital_adequacy": 0.045,
+      "lc_nonfat": 0.3245,
+      "z_score": 45.67,
+      "roa": 0.0185,
+      "bank_size": 27.85,
+      "state": 0,
+      "bank_group": "Ozel"
+    }
+  ]
+}
+```
+
+---
+
+## Regional Liquidity (Bolgesel Likidite)
+
+Prefix: `/api/regional-liquidity`
+Veri Kaynagi: ClickHouse `tbb.financial_statements` + PostgreSQL `branch_info`
+Cache TTL: 1 saat
+
+### `GET /api/regional-liquidity/distribution`
+
+Il bazinda likidite yaratimi dagitimi. Her bankanin LC tutari, o bankanin sube dagilimina oranla illere dagitilir.
+
+| Parametre | Tip | Zorunlu | Varsayilan | Aciklama |
+|-----------|-----|---------|-----------|----------|
+| year | int | Evet | - | Yil |
+| month | int | Evet | - | Ay |
+| accounting_system | string | Hayir | - | Muhasebe sistemi |
+
+**Hesaplama Yontemi**:
+```
+il_LC += banka_LC * (banka_il_sube_sayisi / banka_toplam_sube_sayisi)
+
+banka_LC = lc_nonfat * total_assets
+```
+
+Sadece LC hesaplanabilen (ClickHouse'da verisi olan) bankalar sube/banka sayisina dahil edilir.
+
+**Yanit**:
+```json
+[
+  {
+    "city": "ISTANBUL",
+    "lc_amount": 4600000000.50,
+    "branch_count": 3200,
+    "bank_count": 33,
+    "avg_lc_ratio": 0.285
+  },
+  {
+    "city": "ANKARA",
+    "lc_amount": 1800000000.25,
+    "branch_count": 1200,
+    "bank_count": 30,
+    "avg_lc_ratio": 0.270
+  }
+]
+```
+
+---
+
 ## Endpoint Ozet Tablosu
 
 | # | Metod | Endpoint | Zorunlu Parametre | Aciklama |
@@ -606,3 +982,13 @@ Belirli bir bankanin kurulus tarihi ve tarihce bilgisini getirir.
 | 25 | GET | /api/banks/{bank_name}/branches | bank_name | Sube listesi |
 | 26 | GET | /api/banks/{bank_name}/atms | bank_name | ATM listesi |
 | 27 | GET | /api/banks/{bank_name}/history | bank_name | Banka tarihcesi |
+| 28 | GET | /api/liquidity/creation | year, month | Banka bazli LC oranlari |
+| 29 | GET | /api/liquidity/time-series | - | LC zaman serisi |
+| 30 | GET | /api/liquidity/groups | year, month | Grup bazli LC |
+| 31 | GET | /api/liquidity/group-time-series | - | Grup LC zaman serisi |
+| 32 | GET | /api/liquidity/decomposition | bank_name, year, month | LC bilesen analizi |
+| 33 | GET | /api/risk-analysis/zscore | year, month | Z-Score siralamasi |
+| 34 | GET | /api/risk-analysis/zscore-time-series | - | Z-Score zaman serisi |
+| 35 | GET | /api/risk-analysis/lc-risk | year, month | LC vs Risk iliskisi |
+| 36 | GET | /api/panel-regression/results | - | Panel regresyon sonuclari |
+| 37 | GET | /api/regional-liquidity/distribution | year, month | Il bazli LC dagitimi |
