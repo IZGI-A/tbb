@@ -75,6 +75,14 @@ BANK_GROUP_IDS = [1, 2, 3, 4, 9, 13]
 
 class FinancialScraper(TBBScraper):
 
+    def _restart_driver(self):
+        """Close and recreate the Chrome driver to free memory."""
+        try:
+            self.driver.quit()
+        except Exception:
+            pass
+        self.driver = self._create_driver()
+
     def _navigate_to_page(self):
         self.navigate(FINANCIAL_PAGE)
         time.sleep(5)
@@ -117,6 +125,55 @@ class FinancialScraper(TBBScraper):
             return __import__("json").loads(result) if isinstance(result, str) else result
         except Exception:
             return []
+
+    def _get_all_banks(self) -> list[dict]:
+        """Get ALL banks from the page's mlt_data_bankalar JS data model.
+
+        This returns the full list (56 banks) including major banks like
+        Ziraat, Halkbank, Vakıfbank, İş Bankası, Garanti, Yapı Kredi etc.
+        that are NOT shown in the bankalarList dxList widget (which only
+        shows 40 banks).
+        """
+        result = self.execute_js("""
+            if (typeof mlt_data_bankalar === 'undefined') return '[]';
+            var data = mlt_data_bankalar;
+            var keys = Object.keys(data);
+            var out = [];
+            for (var i = 0; i < keys.length; i++) {
+                out.push({code: data[keys[i]].BANKA_KODU, name: data[keys[i]].TR_ADI});
+            }
+            return JSON.stringify(out);
+        """)
+        if not result:
+            return []
+        try:
+            return __import__("json").loads(result) if isinstance(result, str) else result
+        except Exception:
+            return []
+
+    def _select_banks_by_code(self, bank_codes: list[int]):
+        """Select banks by code directly via selected.bankalarIds.
+
+        This bypasses the bankalarList dxList widget and sets the bank
+        selection directly in the page's JS data model, allowing selection
+        of banks not shown in the list widget.
+        """
+        codes_js = ",".join(str(c) for c in bank_codes)
+        self.execute_js(f"""
+            clearBankaGruplari();
+            var list = $('#bankalarList').dxList('instance');
+            if (list) list.unselectAll();
+            selected.bankalarIds = [{codes_js}];
+            selected.bankalar = {{}};
+            var codes = [{codes_js}];
+            for (var i = 0; i < codes.length; i++) {{
+                if (mlt_data_bankalar[codes[i]]) {{
+                    selected.bankalar[codes[i]] = mlt_data_bankalar[codes[i]];
+                }}
+            }}
+        """)
+        time.sleep(1)
+        logger.info("Selected %d banks by code: %s", len(bank_codes), bank_codes)
 
     def _select_individual_banks(self, bank_indices: list[int]):
         """Clear all selections and select specific banks by dxList index."""
@@ -265,6 +322,9 @@ class FinancialScraper(TBBScraper):
             logger.info("Scraping %d bank groups", len(BANK_GROUP_IDS))
             for group_id in BANK_GROUP_IDS:
                 try:
+                    self._restart_driver()
+                    self._navigate_to_page()
+                    self._select_table_type(table_key, select_all=True)
                     self._select_bank_group(group_id)
                     self.set_distribution_flags(tp=True, yp=True, toplam=True)
                     self.generate_report(wait_seconds=30)
@@ -291,10 +351,16 @@ class FinancialScraper(TBBScraper):
             if not include_individual_banks:
                 continue
 
+            # Get ALL banks from mlt_data_bankalar (includes banks not
+            # shown in the bankalarList dxList widget, like Ziraat, Halkbank,
+            # Vakıfbank, İş Bankası, Garanti, Yapı Kredi etc.)
             try:
-                banks = self._get_available_banks()
+                self._restart_driver()
+                self._navigate_to_page()
+                self._select_table_type(table_key, select_all=True)
+                banks = self._get_all_banks()
             except Exception as e:
-                logger.error("Failed to get bank list (tab may have crashed): %s", e)
+                logger.error("Failed to get bank list: %s", e)
                 continue
 
             if not banks:
@@ -308,7 +374,7 @@ class FinancialScraper(TBBScraper):
 
             for batch_start in range(0, len(banks), BANK_BATCH_SIZE):
                 batch = banks[batch_start : batch_start + BANK_BATCH_SIZE]
-                batch_indices = [b["idx"] for b in batch]
+                batch_codes = [b["code"] for b in batch]
                 batch_names = [b["name"] for b in batch]
                 batch_num = batch_start // BANK_BATCH_SIZE + 1
                 total_batches = (len(banks) + BANK_BATCH_SIZE - 1) // BANK_BATCH_SIZE
@@ -319,7 +385,10 @@ class FinancialScraper(TBBScraper):
                 )
 
                 try:
-                    self._select_individual_banks(batch_indices)
+                    self._restart_driver()
+                    self._navigate_to_page()
+                    self._select_table_type(table_key, select_all=True)
+                    self._select_banks_by_code(batch_codes)
                     self.set_distribution_flags(tp=True, yp=True, toplam=True)
                     self.generate_report(wait_seconds=45)
 

@@ -44,7 +44,7 @@ services:
     deploy:
       resources:
         limits:
-          memory: 2112m
+          memory: 1536m
   clickhouse:
     image: clickhouse/clickhouse-server:24.1
     ports:
@@ -78,11 +78,11 @@ services:
     deploy:
       resources:
         limits:
-          memory: 704m
+          memory: 512m
     command:
     - redis-server
     - --maxmemory
-    - 633mb
+    - 450mb
     - --maxmemory-policy
     - allkeys-lru
   airflow-webserver:
@@ -101,7 +101,7 @@ services:
     deploy:
       resources:
         limits:
-          memory: 1728m
+          memory: 3072m
   airflow-scheduler:
     <<: *airflow-common
     command: airflow scheduler
@@ -110,7 +110,7 @@ services:
     deploy:
       resources:
         limits:
-          memory: 1408m
+          memory: 4096m
   fastapi:
     build:
       context: ./source
@@ -130,7 +130,7 @@ services:
     deploy:
       resources:
         limits:
-          memory: 1152m
+          memory: 1024m
   frontend:
     build:
       context: ./frontend
@@ -144,7 +144,7 @@ services:
     deploy:
       resources:
         limits:
-          memory: 512m
+          memory: 256m
 volumes:
   postgres-data:
   clickhouse-data:

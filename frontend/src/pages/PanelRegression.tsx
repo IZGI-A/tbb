@@ -279,13 +279,33 @@ const PanelRegression: React.FC = () => {
                 title=""
                 xLabel="Sermaye Yeterliligi (%)"
                 yLabel="LC (%)"
-                data={data.bank_data.map(b => ({
-                  name: b.bank_name,
-                  value: [
-                    parseFloat((b.capital_adequacy * 100).toFixed(2)),
-                    parseFloat((b.lc_nonfat * 100).toFixed(2)),
-                  ],
-                }))}
+                showTrendLine
+                groups={[
+                  {
+                    name: 'Kamu',
+                    color: '#cf1322',
+                    data: data.bank_data.filter(b => b.bank_group === 'Kamu').map(b => ({
+                      name: b.bank_name,
+                      value: [parseFloat((b.capital_adequacy * 100).toFixed(2)), parseFloat((b.lc_nonfat * 100).toFixed(2))],
+                    })),
+                  },
+                  {
+                    name: 'Ozel',
+                    color: '#1677ff',
+                    data: data.bank_data.filter(b => b.bank_group === 'Ozel').map(b => ({
+                      name: b.bank_name,
+                      value: [parseFloat((b.capital_adequacy * 100).toFixed(2)), parseFloat((b.lc_nonfat * 100).toFixed(2))],
+                    })),
+                  },
+                  {
+                    name: 'Yabanci',
+                    color: '#389e0d',
+                    data: data.bank_data.filter(b => b.bank_group === 'Yabanci').map(b => ({
+                      name: b.bank_name,
+                      value: [parseFloat((b.capital_adequacy * 100).toFixed(2)), parseFloat((b.lc_nonfat * 100).toFixed(2))],
+                    })),
+                  },
+                ]}
               />
             </Card>
           )}

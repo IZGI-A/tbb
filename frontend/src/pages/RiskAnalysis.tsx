@@ -214,13 +214,32 @@ const RiskAnalysis: React.FC = () => {
                 title=""
                 xLabel="LC Nonfat (%)"
                 yLabel="Z-Score"
-                data={lcRisk.map(d => ({
-                  name: d.bank_name,
-                  value: [
-                    Number((d.lc_nonfat * 100).toFixed(2)),
-                    Number((d.z_score ?? 0).toFixed(2)),
-                  ],
-                }))}
+                groups={[
+                  {
+                    name: 'Kamu',
+                    color: '#cf1322',
+                    data: lcRisk.filter(d => d.bank_group === 'Kamu').map(d => ({
+                      name: d.bank_name,
+                      value: [Number((d.lc_nonfat * 100).toFixed(2)), Number((d.z_score ?? 0).toFixed(2))],
+                    })),
+                  },
+                  {
+                    name: 'Ozel',
+                    color: '#1677ff',
+                    data: lcRisk.filter(d => d.bank_group === 'Ozel').map(d => ({
+                      name: d.bank_name,
+                      value: [Number((d.lc_nonfat * 100).toFixed(2)), Number((d.z_score ?? 0).toFixed(2))],
+                    })),
+                  },
+                  {
+                    name: 'Yabanci',
+                    color: '#389e0d',
+                    data: lcRisk.filter(d => d.bank_group === 'Yabanci').map(d => ({
+                      name: d.bank_name,
+                      value: [Number((d.lc_nonfat * 100).toFixed(2)), Number((d.z_score ?? 0).toFixed(2))],
+                    })),
+                  },
+                ]}
                 loading={lcRiskLoading}
               />
             </Card>

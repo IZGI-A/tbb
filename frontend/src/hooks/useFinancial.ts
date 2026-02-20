@@ -23,10 +23,12 @@ export function useFinancialPeriods() {
   });
 }
 
-export function useFinancialBankNames() {
+export function useFinancialBankNames(accountingSystem?: string) {
   return useQuery<string[]>({
-    queryKey: ['financial', 'bank-names'],
-    queryFn: () => financialApi.getBankNames().then(r => r.data),
+    queryKey: ['financial', 'bank-names', accountingSystem],
+    queryFn: () => financialApi.getBankNames(
+      accountingSystem ? { accounting_system: accountingSystem } : undefined
+    ).then(r => r.data),
   });
 }
 
