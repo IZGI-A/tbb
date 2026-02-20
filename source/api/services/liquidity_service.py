@@ -611,7 +611,7 @@ async def get_liquidity_group_time_series(
     accounting_system: str | None = None,
 ) -> list[dict]:
     """LC time series by bank ownership group (Kamusal / Özel / Yabancı)."""
-    cache_key = f"liq:grpts:v9:{accounting_system}"
+    cache_key = f"liq:grpts:v11:{accounting_system}"
     cached = await cache_get(redis, cache_key)
     if cached:
         return cached
