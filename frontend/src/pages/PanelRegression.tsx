@@ -232,7 +232,7 @@ const PanelRegression: React.FC = () => {
       </h2>
 
       <Card style={{ marginBottom: 16 }}>
-        <Space>
+        <Space wrap>
           <Select
             placeholder="Muhasebe Sistemi"
             allowClear
