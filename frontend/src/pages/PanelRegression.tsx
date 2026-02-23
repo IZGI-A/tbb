@@ -194,7 +194,7 @@ const PanelRegression: React.FC = () => {
               {model.equation}
             </div>
           )}
-          <Descriptions size="small" column={4} style={{ marginBottom: 16 }}>
+          <Descriptions size="small" column={{ xs: 1, sm: 2, md: 4 }} style={{ marginBottom: 16 }}>
             <Descriptions.Item label="Bagimli Degisken">{model.dependent}</Descriptions.Item>
             <Descriptions.Item label="R²">{model.r_squared?.toFixed(4)}</Descriptions.Item>
             <Descriptions.Item label="Duz. R²">{model.adj_r_squared?.toFixed(4)}</Descriptions.Item>
@@ -214,6 +214,7 @@ const PanelRegression: React.FC = () => {
             dataSource={model.coefficients ?? []}
             rowKey="variable"
             pagination={false}
+            scroll={{ x: 800 }}
             size="small"
           />
         </>
@@ -257,17 +258,17 @@ const PanelRegression: React.FC = () => {
       {data && (
         <>
           {/* Panel Info */}
-          <Row gutter={16} style={{ marginBottom: 16 }}>
-            <Col flex={1}>
+          <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
+            <Col xs={12} md={12} lg={6}>
               <Card><Statistic title="Banka Sayisi" value={data.panel_info.n_banks} /></Card>
             </Col>
-            <Col flex={1}>
+            <Col xs={12} md={12} lg={6}>
               <Card><Statistic title="Donem Sayisi" value={data.panel_info.n_periods} /></Card>
             </Col>
-            <Col flex={1}>
+            <Col xs={12} md={12} lg={6}>
               <Card><Statistic title="Toplam Gozlem" value={data.panel_info.total_obs} /></Card>
             </Col>
-            <Col flex={1}>
+            <Col xs={12} md={12} lg={6}>
               <Card><Statistic title="Donemler" value={data.panel_info.periods.map(p => p.replace('_', '/')).join(', ')} /></Card>
             </Col>
           </Row>
@@ -320,6 +321,7 @@ const PanelRegression: React.FC = () => {
               }))}
               rowKey="variable"
               pagination={false}
+              scroll={{ x: 600 }}
               size="small"
             />
           </Card>

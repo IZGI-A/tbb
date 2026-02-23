@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Card, Select, Space, Table, Row, Col, Statistic, Spin, Alert } from 'antd';
+import { Card, Select, Space, Table, Row, Col, Statistic, Spin, Alert, Grid } from 'antd';
 import ReactECharts from 'echarts-for-react';
 import YearMonthFilter from '../components/filters/YearMonthFilter';
 import { useFinancialPeriods } from '../hooks/useFinancial';
@@ -17,6 +17,9 @@ const RegionalLiquidity: React.FC = () => {
   const months = year
     ? Array.from(new Set<number>(periodList.filter(p => p.year_id === year).map(p => p.month_id))).sort((a, b) => b - a)
     : [];
+
+  const screens = Grid.useBreakpoint();
+  const isMobile = !screens.md;
 
   const { data, isLoading, error } = useRegionalLiquidity(year, month, accountingSystem);
 
@@ -127,14 +130,14 @@ const RegionalLiquidity: React.FC = () => {
       {data && data.length > 0 && (
         <>
           {/* Summary Stats */}
-          <Row gutter={16} style={{ marginBottom: 16 }}>
-            <Col flex={1}>
+          <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
+            <Col xs={12} md={12} lg={6}>
               <Card><Statistic title="Toplam Il Sayisi" value={data.length} /></Card>
             </Col>
-            <Col flex={1}>
+            <Col xs={12} md={12} lg={6}>
               <Card><Statistic title="Toplam Sube" value={totalBranches.toLocaleString('tr-TR')} /></Card>
             </Col>
-            <Col flex={1}>
+            <Col xs={12} md={12} lg={6}>
               <Card>
                 <Statistic
                   title="En Yuksek LC (Il)"
@@ -142,7 +145,7 @@ const RegionalLiquidity: React.FC = () => {
                 />
               </Card>
             </Col>
-            <Col flex={1}>
+            <Col xs={12} md={12} lg={6}>
               <Card>
                 <Statistic
                   title="En Yuksek LC Tutari"
@@ -158,10 +161,10 @@ const RegionalLiquidity: React.FC = () => {
           {/* Charts Side by Side */}
           <Row gutter={16} style={{ marginBottom: 16 }}>
             {/* Top 20 by LC - Horizontal Bar */}
-            <Col span={12}>
+            <Col xs={24} lg={12}>
               <Card title="En Yuksek LC - Ilk 20 Il" style={{ height: '100%' }}>
                 <ReactECharts
-                  style={{ height: 520 }}
+                  style={{ height: isMobile ? 400 : 520 }}
                   showLoading={isLoading}
                   option={{
                     tooltip: {
@@ -207,10 +210,10 @@ const RegionalLiquidity: React.FC = () => {
             </Col>
 
             {/* Top 20 by Branch Count - Horizontal Bar */}
-            <Col span={12}>
+            <Col xs={24} lg={12}>
               <Card title="Sube Dagilimi - Ilk 20 Il" style={{ height: '100%' }}>
                 <ReactECharts
-                  style={{ height: 520 }}
+                  style={{ height: isMobile ? 400 : 520 }}
                   showLoading={isLoading}
                   option={{
                     tooltip: {

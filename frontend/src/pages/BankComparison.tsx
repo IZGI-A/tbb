@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Card, Select, Space, Row, Col, Statistic, Empty } from 'antd';
+import { Card, Select, Space, Row, Col, Statistic, Empty, Grid } from 'antd';
 import ReactECharts from 'echarts-for-react';
 import LineChart from '../components/charts/LineChart';
 import YearMonthFilter from '../components/filters/YearMonthFilter';
@@ -22,6 +22,8 @@ const BankComparison: React.FC = () => {
   const [decompMonth, setDecompMonth] = useState<number | undefined>(9);
   const [decompAccounting, setDecompAccounting] = useState<string | undefined>('SOLO');
   const [decompositionBank, setDecompositionBank] = useState<string | undefined>();
+  const screens = Grid.useBreakpoint();
+  const isMobile = !screens.md;
 
   const { data: periods } = useFinancialPeriods();
   const { data: bankNames } = useFinancialBankNames();
@@ -135,7 +137,7 @@ const BankComparison: React.FC = () => {
             placeholder="Karsilastirilacak bankalari secin (maks 8)"
             value={selectedBanks}
             onChange={(vals: string[]) => setSelectedBanks(vals.slice(0, 8))}
-            style={{ minWidth: 400 }}
+            style={{ minWidth: isMobile ? undefined : 400, width: isMobile ? '100%' : undefined }}
             maxTagCount={3}
             showSearch
             options={bankOptions}
@@ -236,7 +238,7 @@ const BankComparison: React.FC = () => {
             showSearch
             value={decompositionBank}
             onChange={setDecompositionBank}
-            style={{ width: 400 }}
+            style={{ width: isMobile ? '100%' : 400 }}
             options={bankOptions}
           />
         </Space>
@@ -258,8 +260,8 @@ const BankComparison: React.FC = () => {
           ];
           return (
             <>
-              <Row gutter={16} style={{ marginBottom: 16 }}>
-                <Col flex={1}>
+              <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
+                <Col xs={24} sm={12} lg={4}>
                   <Card style={{ background: '#f0f5ff', border: '1px solid #d6e4ff' }}>
                     <Statistic
                       title="LC (Cat Nonfat)"
@@ -269,7 +271,7 @@ const BankComparison: React.FC = () => {
                     />
                   </Card>
                 </Col>
-                <Col flex={1}>
+                <Col xs={12} sm={12} lg={5}>
                   <Card style={{ background: '#f6ffed', border: '1px solid #d9f7be' }}>
                     <Statistic
                       title="Likit Olmayan Varlik (+)"
@@ -279,7 +281,7 @@ const BankComparison: React.FC = () => {
                     />
                   </Card>
                 </Col>
-                <Col flex={1}>
+                <Col xs={12} sm={12} lg={5}>
                   <Card style={{ background: '#f6ffed', border: '1px solid #d9f7be' }}>
                     <Statistic
                       title="Likit Yukumluluk (+)"
@@ -289,7 +291,7 @@ const BankComparison: React.FC = () => {
                     />
                   </Card>
                 </Col>
-                <Col flex={1}>
+                <Col xs={12} sm={12} lg={5}>
                   <Card style={{ background: '#fff2f0', border: '1px solid #ffccc7' }}>
                     <Statistic
                       title="Likit Varlik (-)"
@@ -299,7 +301,7 @@ const BankComparison: React.FC = () => {
                     />
                   </Card>
                 </Col>
-                <Col flex={1}>
+                <Col xs={12} sm={12} lg={5}>
                   <Card style={{ background: '#fff2f0', border: '1px solid #ffccc7' }}>
                     <Statistic
                       title="Likit Olm. Yuk. + Ozkaynak (-)"
@@ -311,7 +313,7 @@ const BankComparison: React.FC = () => {
                 </Col>
               </Row>
               <ReactECharts
-                style={{ height: 350 }}
+                style={{ height: isMobile ? 280 : 350 }}
                 option={{
                   tooltip: {
                     trigger: 'axis',

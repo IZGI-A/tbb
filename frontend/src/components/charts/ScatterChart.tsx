@@ -1,5 +1,6 @@
 import React from 'react';
 import ReactECharts from 'echarts-for-react';
+import { Grid } from 'antd';
 import type { EChartsOption } from 'echarts';
 
 interface ScatterPoint {
@@ -21,6 +22,7 @@ interface ScatterChartProps {
   groups?: ScatterGroup[];
   showTrendLine?: boolean;
   loading?: boolean;
+  height?: number;
 }
 
 const GROUP_SYMBOLS = ['circle', 'diamond', 'triangle'] as const;
@@ -42,7 +44,12 @@ function computeTrendLine(points: [number, number][]): { slope: number; intercep
   return { slope, intercept, minX, maxX };
 }
 
-const ScatterChart: React.FC<ScatterChartProps> = ({ title, xLabel, yLabel, data, groups, showTrendLine, loading }) => {
+const ScatterChart: React.FC<ScatterChartProps> = ({ title, xLabel, yLabel, data, groups, showTrendLine, loading, height }) => {
+  const screens = Grid.useBreakpoint();
+  const isMobile = !screens.md;
+  const chartHeight = height ?? (isMobile ? 320 : 480);
+  const symbolSize = isMobile ? 10 : 14;
+
   const allPoints: [number, number][] = [];
 
   const series: any[] = groups
@@ -52,7 +59,7 @@ const ScatterChart: React.FC<ScatterChartProps> = ({ title, xLabel, yLabel, data
           type: 'scatter',
           name: g.name,
           symbol: GROUP_SYMBOLS[i % GROUP_SYMBOLS.length],
-          symbolSize: 14,
+          symbolSize,
           itemStyle: {
             color: g.color,
             borderColor: '#fff',
@@ -73,7 +80,7 @@ const ScatterChart: React.FC<ScatterChartProps> = ({ title, xLabel, yLabel, data
               show: true,
               formatter: (p: any) => p.data.name.replace(/ A\.Ş\.$/, '').replace(/ T\.A\.O\.$/, ''),
               position: 'top',
-              fontSize: 11,
+              fontSize: isMobile ? 9 : 11,
               fontWeight: 600,
               color: '#333',
               backgroundColor: 'rgba(255,255,255,0.85)',
@@ -89,7 +96,7 @@ const ScatterChart: React.FC<ScatterChartProps> = ({ title, xLabel, yLabel, data
         (data ?? []).forEach(d => allPoints.push(d.value));
         return [{
           type: 'scatter',
-          symbolSize: 14,
+          symbolSize,
           itemStyle: {
             borderColor: '#fff',
             borderWidth: 1.5,
@@ -103,7 +110,7 @@ const ScatterChart: React.FC<ScatterChartProps> = ({ title, xLabel, yLabel, data
               show: true,
               formatter: (p: any) => p.data.name,
               position: 'top',
-              fontSize: 11,
+              fontSize: isMobile ? 9 : 11,
               fontWeight: 600,
             },
           },
@@ -132,14 +139,14 @@ const ScatterChart: React.FC<ScatterChartProps> = ({ title, xLabel, yLabel, data
   }
 
   const option: EChartsOption = {
-    title: title ? { text: title, left: 'center', textStyle: { fontSize: 15, fontWeight: 600 } } : undefined,
+    title: title ? { text: title, left: 'center', textStyle: { fontSize: isMobile ? 13 : 15, fontWeight: 600 } } : undefined,
     tooltip: {
       trigger: 'item',
       backgroundColor: 'rgba(255,255,255,0.96)',
       borderColor: '#e8e8e8',
       borderWidth: 1,
       padding: [10, 14],
-      textStyle: { fontSize: 13, color: '#333' },
+      textStyle: { fontSize: isMobile ? 11 : 13, color: '#333' },
       formatter: (params: any) => {
         if (params.seriesType === 'line') return '';
         const d = params.data;
@@ -151,10 +158,10 @@ const ScatterChart: React.FC<ScatterChartProps> = ({ title, xLabel, yLabel, data
     },
     legend: groups ? {
       bottom: 4,
-      itemWidth: 14,
-      itemHeight: 14,
-      textStyle: { fontSize: 13 },
-      itemGap: 24,
+      itemWidth: isMobile ? 10 : 14,
+      itemHeight: isMobile ? 10 : 14,
+      textStyle: { fontSize: isMobile ? 10 : 13 },
+      itemGap: isMobile ? 12 : 24,
     } : undefined,
     grid: {
       left: '6%',
@@ -167,9 +174,9 @@ const ScatterChart: React.FC<ScatterChartProps> = ({ title, xLabel, yLabel, data
       type: 'value',
       name: xLabel,
       nameLocation: 'middle',
-      nameGap: 32,
-      nameTextStyle: { fontSize: 13, fontWeight: 600, color: '#555' },
-      axisLabel: { formatter: '{value}%', fontSize: 11, color: '#666' },
+      nameGap: isMobile ? 24 : 32,
+      nameTextStyle: { fontSize: isMobile ? 11 : 13, fontWeight: 600, color: '#555' },
+      axisLabel: { formatter: '{value}%', fontSize: isMobile ? 9 : 11, color: '#666' },
       splitLine: { lineStyle: { color: '#f0f0f0', type: 'dashed' } },
       axisLine: { lineStyle: { color: '#d9d9d9' } },
     },
@@ -177,9 +184,9 @@ const ScatterChart: React.FC<ScatterChartProps> = ({ title, xLabel, yLabel, data
       type: 'value',
       name: yLabel,
       nameLocation: 'middle',
-      nameGap: 55,
-      nameTextStyle: { fontSize: 13, fontWeight: 600, color: '#555' },
-      axisLabel: { formatter: '{value}%', fontSize: 11, color: '#666' },
+      nameGap: isMobile ? 40 : 55,
+      nameTextStyle: { fontSize: isMobile ? 11 : 13, fontWeight: 600, color: '#555' },
+      axisLabel: { formatter: '{value}%', fontSize: isMobile ? 9 : 11, color: '#666' },
       splitLine: { lineStyle: { color: '#f0f0f0', type: 'dashed' } },
       axisLine: { lineStyle: { color: '#d9d9d9' } },
     },
@@ -192,7 +199,7 @@ const ScatterChart: React.FC<ScatterChartProps> = ({ title, xLabel, yLabel, data
     <ReactECharts
       option={option}
       showLoading={loading}
-      style={{ height: 480 }}
+      style={{ height: chartHeight }}
     />
   );
 };
