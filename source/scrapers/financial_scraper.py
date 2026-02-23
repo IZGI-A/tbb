@@ -67,7 +67,7 @@ TABLE_TYPES = {
 }
 
 BANK_GROUP_ALL = 5  # Turkiye Bankacilik Sistemi
-BANK_BATCH_SIZE = 5  # Banks per batch to avoid tab crash
+BANK_BATCH_SIZE = 2  # Banks per batch to avoid tab crash (reduced from 5)
 
 # Bank group IDs to scrape (each generates a separate report with group name as bank_name)
 BANK_GROUP_IDS = [1, 2, 3, 4, 9, 13]
@@ -77,10 +77,13 @@ class FinancialScraper(TBBScraper):
 
     def _restart_driver(self):
         """Close and recreate the Chrome driver to free memory."""
+        import gc
         try:
             self.driver.quit()
         except Exception:
             pass
+        gc.collect()
+        time.sleep(2)
         self.driver = self._create_driver()
 
     def _navigate_to_page(self):
