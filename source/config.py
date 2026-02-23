@@ -10,7 +10,7 @@ class Settings:
     POSTGRES_PASSWORD: str = os.getenv("POSTGRES_PASSWORD", "tbb_secure_pass_123")
     POSTGRES_DB: str = os.getenv("POSTGRES_DB", "tbb")
     POSTGRES_HOST: str = os.getenv("POSTGRES_HOST", "localhost")
-    POSTGRES_PORT: int = int(os.getenv("POSTGRES_PORT", "5433"))
+    POSTGRES_PORT: int = int(os.getenv("POSTGRES_PORT", "5432"))
 
     @property
     def postgres_dsn(self) -> str:
@@ -21,15 +21,15 @@ class Settings:
 
     # ClickHouse
     CLICKHOUSE_HOST: str = os.getenv("CLICKHOUSE_HOST", "localhost")
-    CLICKHOUSE_PORT: int = int(os.getenv("CLICKHOUSE_PORT", "9001"))
-    CLICKHOUSE_HTTP_PORT: int = int(os.getenv("CLICKHOUSE_HTTP_PORT", "8124"))
+    CLICKHOUSE_PORT: int = int(os.getenv("CLICKHOUSE_PORT", "9000"))
+    CLICKHOUSE_HTTP_PORT: int = int(os.getenv("CLICKHOUSE_HTTP_PORT", "8123"))
     CLICKHOUSE_DB: str = os.getenv("CLICKHOUSE_DB", "tbb")
     CLICKHOUSE_USER: str = os.getenv("CLICKHOUSE_USER", "default")
     CLICKHOUSE_PASSWORD: str = os.getenv("CLICKHOUSE_PASSWORD", "")
 
     # Redis
     REDIS_HOST: str = os.getenv("REDIS_HOST", "localhost")
-    REDIS_PORT: int = int(os.getenv("REDIS_PORT", "6380"))
+    REDIS_PORT: int = int(os.getenv("REDIS_PORT", "6379"))
     REDIS_DB: int = int(os.getenv("REDIS_DB", "0"))
 
     @property
@@ -38,9 +38,9 @@ class Settings:
 
     # FastAPI
     FASTAPI_HOST: str = os.getenv("FASTAPI_HOST", "0.0.0.0")
-    FASTAPI_PORT: int = int(os.getenv("FASTAPI_PORT", "8001"))
+    FASTAPI_PORT: int = int(os.getenv("FASTAPI_PORT", "8000"))
     CORS_ORIGINS: list[str] = os.getenv(
-        "CORS_ORIGINS", "http://localhost:3001,http://localhost:5174"
+        "CORS_ORIGINS", "http://localhost:3000,http://localhost:5173"
     ).split(",")
 
     # TBB Scraping
