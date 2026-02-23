@@ -1,10 +1,23 @@
-"""Airflow DAG for TBB Financial Statements ETL pipeline.
+"""Airflow DAGs for TBB Financial Statements ETL pipeline.
+
+Two independent DAGs:
+  - tbb_financial_solo:         TFRS9-SOLO statements
+  - tbb_financial_consolidated: TFRS9-KONSOLIDE statements
 
 Schedule: Weekly (Monday 06:00 UTC)
-Chain: scrape_solo → transform_solo → load_solo → scrape_consolidated → transform_consolidated → load_consolidated
+Chain (each DAG): scrape → transform → load
 
-Solo and consolidated are scraped sequentially to avoid Chrome tab crashes
-from excessive memory usage.
+Period selection (oncelik sirasi):
+  1. --conf ile verilen period_keys (en yuksek oncelik)
+  2. dags/config/financial_periods.json dosyasindaki period_keys
+  3. Bos liste = sadece en son donem (site varsayilani)
+
+Ornekler:
+  # --conf ile belirli donemler
+  airflow dags trigger tbb_financial_solo --conf '{"period_keys": [139, 138, 137]}'
+
+  # config dosyasindan (dags/config/financial_periods.json duzenle)
+  airflow dags trigger tbb_financial_solo
 """
 
 import json
@@ -13,17 +26,19 @@ import logging
 from datetime import datetime, timedelta
 
 from airflow import DAG
+from airflow.models.param import Param
 from airflow.operators.python import PythonOperator
 
 logger = logging.getLogger(__name__)
 
 STAGING_DIR = "/tmp/tbb_staging/financial"
+PERIODS_CONFIG = os.path.join(os.path.dirname(__file__), "config", "financial_periods.json")
 
 default_args = {
     "owner": "tbb",
     "retries": 2,
     "retry_delay": timedelta(minutes=5),
-    "execution_timeout": timedelta(hours=2),
+    "execution_timeout": timedelta(hours=4),
 }
 
 
@@ -31,13 +46,52 @@ def _ensure_staging_dir():
     os.makedirs(STAGING_DIR, exist_ok=True)
 
 
+def _load_period_keys_from_config() -> list[int]:
+    """Read period_keys from dags/config/financial_periods.json."""
+    try:
+        with open(PERIODS_CONFIG, encoding="utf-8") as f:
+            data = json.load(f)
+        return data.get("period_keys", [])
+    except (FileNotFoundError, json.JSONDecodeError):
+        return []
+
+
+def _resolve_period_keys(context) -> list[int] | None:
+    """Determine which period keys to use.
+
+    Priority:
+      1. --conf '{"period_keys": [...]}' (highest)
+      2. dags/config/financial_periods.json
+      3. Empty → None (site default = most recent period)
+    """
+    # 1. From --conf (DAG params)
+    keys = context["params"].get("period_keys")
+    if keys:
+        logger.info("Period keys from --conf: %s", keys)
+        return keys
+
+    # 2. From config file
+    keys = _load_period_keys_from_config()
+    if keys:
+        logger.info("Period keys from config file: %s", keys)
+        return keys
+
+    # 3. Default
+    logger.info("No period keys specified — using site default (most recent)")
+    return None
+
+
 def _scrape_table(table_key: str, **context):
     from scrapers.financial_scraper import FinancialScraper
 
     _ensure_staging_dir()
 
+    period_keys = _resolve_period_keys(context)
+
     with FinancialScraper() as scraper:
-        raw_data = scraper.scrape_all(table_keys=[table_key])
+        raw_data = scraper.scrape_all(
+            table_keys=[table_key], period_keys=period_keys,
+        )
 
     # Write as JSONL (one JSON object per line) to enable streaming reads
     staging_path = os.path.join(
@@ -149,6 +203,21 @@ def _load_table(table_key: str, **context):
     logger.info("Loaded %d %s rows into ClickHouse", total, table_key)
 
 
+# --- DAG params shared by both DAGs ---
+
+dag_params = {
+    "period_keys": Param(
+        default=[],
+        type="array",
+        description=(
+            "Period ID keys to scrape. Leave empty for the most recent "
+            "period (site default). Use FinancialScraper._get_available_periods() "
+            "to discover valid keys."
+        ),
+    ),
+}
+
+
 # --- Task factory functions (closures for PythonOperator) ---
 
 def scrape_solo(**ctx):
@@ -170,15 +239,18 @@ def load_consolidated(**ctx):
     _load_table("consolidated", **ctx)
 
 
+# ── DAG 1: Solo ─────────────────────────────────────────────────
+
 with DAG(
-    dag_id="tbb_financial_statements",
+    dag_id="tbb_financial_solo",
     default_args=default_args,
-    description="TBB Financial Statements ETL Pipeline (Solo + Consolidated)",
+    description="TBB Financial Statements ETL Pipeline (Solo)",
     schedule_interval="0 6 * * 1",  # Monday 06:00
     start_date=datetime(2024, 1, 1),
     catchup=False,
-    tags=["tbb", "financial"],
-) as dag:
+    tags=["tbb", "financial", "solo"],
+    params=dag_params,
+) as dag_solo:
 
     t_scrape_solo = PythonOperator(
         task_id="scrape_solo",
@@ -193,6 +265,22 @@ with DAG(
         python_callable=load_solo,
     )
 
+    t_scrape_solo >> t_transform_solo >> t_load_solo
+
+
+# ── DAG 2: Consolidated ─────────────────────────────────────────
+
+with DAG(
+    dag_id="tbb_financial_consolidated",
+    default_args=default_args,
+    description="TBB Financial Statements ETL Pipeline (Consolidated)",
+    schedule_interval="0 6 * * 1",  # Monday 06:00
+    start_date=datetime(2024, 1, 1),
+    catchup=False,
+    tags=["tbb", "financial", "consolidated"],
+    params=dag_params,
+) as dag_consolidated:
+
     t_scrape_cons = PythonOperator(
         task_id="scrape_consolidated",
         python_callable=scrape_consolidated,
@@ -206,5 +294,4 @@ with DAG(
         python_callable=load_consolidated,
     )
 
-    # Sequential: solo pipeline → consolidated pipeline
-    t_scrape_solo >> t_transform_solo >> t_load_solo >> t_scrape_cons >> t_transform_cons >> t_load_cons
+    t_scrape_cons >> t_transform_cons >> t_load_cons

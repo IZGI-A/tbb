@@ -175,6 +175,61 @@ class FinancialScraper(TBBScraper):
         time.sleep(1)
         logger.info("Selected %d banks by code: %s", len(bank_codes), bank_codes)
 
+    # ------------------------------------------------------------------ #
+    #  Period selection helpers
+    # ------------------------------------------------------------------ #
+
+    def _get_available_periods(self) -> list[dict]:
+        """Get all available periods from the page's mlt_data_donemler JS object.
+
+        Returns list of {key, year, month, month_str} dicts sorted by
+        year desc, month desc (most recent first).
+        """
+        result = self.execute_js("""
+            var src = (typeof mlt_data_donemler !== 'undefined') ? mlt_data_donemler
+                    : (typeof data_donemler !== 'undefined') ? data_donemler
+                    : null;
+            if (!src) return '[]';
+            var keys = Object.keys(src);
+            var out = [];
+            for (var i = 0; i < keys.length; i++) {
+                var d = src[keys[i]];
+                out.push({key: parseInt(keys[i]), year: d.YIL, month: d.AY, month_str: d.AY_STR || ''});
+            }
+            return JSON.stringify(out);
+        """)
+        if not result:
+            return []
+        try:
+            items = __import__("json").loads(result) if isinstance(result, str) else result
+            items.sort(key=lambda p: (p.get("year", 0), p.get("month", 0)), reverse=True)
+            return items
+        except Exception:
+            return []
+
+    def _select_periods(self, period_keys: list[int]):
+        """Set selected periods by key, directly via selected.donemlerIds.
+
+        Mirrors the _select_banks_by_code() pattern: bypasses widget and
+        sets the JS data model directly.
+        """
+        keys_js = ",".join(str(k) for k in period_keys)
+        self.execute_js(f"""
+            var src = (typeof mlt_data_donemler !== 'undefined') ? mlt_data_donemler
+                    : (typeof data_donemler !== 'undefined') ? data_donemler
+                    : null;
+            selected.donemlerIds = [{keys_js}];
+            selected.donemler = {{}};
+            var keys = [{keys_js}];
+            for (var i = 0; i < keys.length; i++) {{
+                if (src && src[keys[i]]) {{
+                    selected.donemler[keys[i]] = src[keys[i]];
+                }}
+            }}
+        """)
+        time.sleep(1)
+        logger.info("Selected %d periods by key: %s", len(period_keys), period_keys)
+
     def _select_individual_banks(self, bank_indices: list[int]):
         """Clear all selections and select specific banks by dxList index."""
         # Clear previous selections
@@ -238,8 +293,15 @@ class FinancialScraper(TBBScraper):
         self,
         table_key: str = "solo",
         bank_group_id: int = BANK_GROUP_ALL,
+        period_keys: list[int] | None = None,
     ) -> tuple[list[dict[str, Any]], list[dict], dict[int, dict]]:
         """Navigate, configure filters, generate report, and extract data.
+
+        Args:
+            table_key: 'solo' or 'consolidated'.
+            bank_group_id: Bank group to select.
+            period_keys: Period ID keys to select.  If *None*, uses the
+                site's default selection (most recent period).
 
         Returns (pivot_records, period_info, hierarchy_lookup).
         """
@@ -247,6 +309,10 @@ class FinancialScraper(TBBScraper):
 
         self._select_table_type(table_key, select_all=True)
         self._select_bank_group(bank_group_id)
+
+        # Select specific periods when requested
+        if period_keys:
+            self._select_periods(period_keys)
 
         # Distribution flags must be set before generating the report
         self.set_distribution_flags(tp=True, yp=True, toplam=True)
@@ -274,6 +340,7 @@ class FinancialScraper(TBBScraper):
         self,
         table_keys: list[str] | None = None,
         include_individual_banks: bool = True,
+        period_keys: list[int] | None = None,
     ) -> list[dict[str, Any]]:
         """Full scrape: generate reports for each table type and extract data.
 
@@ -282,6 +349,8 @@ class FinancialScraper(TBBScraper):
                         If None, scrapes only 'solo'.
             include_individual_banks: If True, also scrape per-bank data
                         in addition to the aggregate.
+            period_keys: Period ID keys to select.  If *None*, uses the
+                        site's default selection (most recent period).
 
         Returns:
             list[dict] with keys compatible with transform_financial.
@@ -300,7 +369,9 @@ class FinancialScraper(TBBScraper):
             # --- Phase 1: Aggregate (Türkiye Bankacılık Sistemi) ---
             try:
                 pivot_records, period_info, hierarchy = (
-                    self.scrape_financial_data(table_key=table_key)
+                    self.scrape_financial_data(
+                        table_key=table_key, period_keys=period_keys,
+                    )
                 )
             except Exception as e:
                 logger.error("Failed to scrape table '%s': %s", table_key, e)
@@ -326,8 +397,10 @@ class FinancialScraper(TBBScraper):
                     self._navigate_to_page()
                     self._select_table_type(table_key, select_all=True)
                     self._select_bank_group(group_id)
+                    if period_keys:
+                        self._select_periods(period_keys)
                     self.set_distribution_flags(tp=True, yp=True, toplam=True)
-                    self.generate_report(wait_seconds=30)
+                    self.generate_report(wait_seconds=60)
 
                     group_records = self.extract_pivot_data(
                         pivot_selector="#pivotBanka1",
@@ -389,8 +462,10 @@ class FinancialScraper(TBBScraper):
                     self._navigate_to_page()
                     self._select_table_type(table_key, select_all=True)
                     self._select_banks_by_code(batch_codes)
+                    if period_keys:
+                        self._select_periods(period_keys)
                     self.set_distribution_flags(tp=True, yp=True, toplam=True)
-                    self.generate_report(wait_seconds=45)
+                    self.generate_report(wait_seconds=60)
 
                     batch_records = self.extract_pivot_data(
                         pivot_selector="#pivotBanka1",

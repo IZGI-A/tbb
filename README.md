@@ -5,7 +5,7 @@ Turkiye Bankalar Birligi (TBB) kamuya acik verilerini toplayan, isleyen ve gorse
 ## Ozellikler
 
 - TBB web sitelerinden otomatik veri toplama (Selenium)
-- 4 Airflow DAG ile zamanlanmis ETL pipeline'lari
+- 5 Airflow DAG ile zamanlanmis ETL pipeline'lari
 - PostgreSQL (yapisal veri) + ClickHouse (analitik veri) ikili veritabani mimarisi
 - FastAPI ile 27 REST endpoint (Redis cache + gzip sikistirma)
 - React dashboard: finansal oranlar, bolgesel analizler, risk merkezi, banka rehberi
@@ -112,9 +112,13 @@ Kurulumdan sonra veritabanlari bos gelir. Verileri toplamak icin Airflow DAG'lar
 docker compose exec airflow-webserver airflow dags unpause tbb_bank_info
 docker compose exec airflow-webserver airflow dags trigger tbb_bank_info
 
-# Finansal tablolar
-docker compose exec airflow-webserver airflow dags unpause tbb_financial_statements
-docker compose exec airflow-webserver airflow dags trigger tbb_financial_statements
+# Finansal tablolar (Solo)
+docker compose exec airflow-webserver airflow dags unpause tbb_financial_solo
+docker compose exec airflow-webserver airflow dags trigger tbb_financial_solo
+
+# Finansal tablolar (Konsolide)
+docker compose exec airflow-webserver airflow dags unpause tbb_financial_consolidated
+docker compose exec airflow-webserver airflow dags trigger tbb_financial_consolidated
 
 # Bolgesel istatistikler
 docker compose exec airflow-webserver airflow dags unpause tbb_region_statistics
@@ -128,7 +132,8 @@ docker compose exec airflow-webserver airflow dags trigger tbb_risk_center
 DAG durumlarini takip et:
 
 ```bash
-docker compose exec airflow-webserver airflow dags list-runs -d tbb_financial_statements
+docker compose exec airflow-webserver airflow dags list-runs -d tbb_financial_solo
+docker compose exec airflow-webserver airflow dags list-runs -d tbb_financial_consolidated
 ```
 
 ## Yeniden Build

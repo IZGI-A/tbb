@@ -1,0 +1,8 @@
+{
+  "period_keys": [
+    1477328115, 1477328118, 1477328121, -1447468703,
+    1477329076, 1477329079, 1477329082, -1447438912,
+    1477330037, 1477330040, 1477330043
+  ],
+  "_comment": "Cekilecek donem ID'leri. Bos liste = sadece en son donem (site varsayilani). Ornek: [139, 138, 137]. Gecerli key'leri ogrenmek icin: docker compose exec airflow-webserver python3 -c \"from scrapers.financial_scraper import FinancialScraper; s = FinancialScraper(); s._navigate_to_page(); [print(f'key={p[\"key\"]}  {p[\"year\"]}/{p[\"month\"]} ({p[\"month_str\"]})') for p in s._get_available_periods()]; s.driver.quit()\""
+}
