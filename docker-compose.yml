@@ -31,7 +31,7 @@ services:
     - -c
     - shared_buffers=528MB
     ports:
-    - "5432:5432"
+    - "5433:5432"
     volumes:
     - postgres-data:/var/lib/postgresql/data
     - ./docker/postgres/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
@@ -48,8 +48,8 @@ services:
   clickhouse:
     image: clickhouse/clickhouse-server:24.1
     ports:
-    - "8123:8123"
-    - "9000:9000"
+    - "8124:8123"
+    - "9001:9000"
     volumes:
     - clickhouse-data:/var/lib/clickhouse
     - ./docker/clickhouse/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
@@ -66,7 +66,7 @@ services:
   redis:
     image: redis:7-alpine
     ports:
-    - "6379:6379"
+    - "6380:6379"
     volumes:
     - redis-data:/data
     healthcheck:
@@ -95,7 +95,7 @@ services:
         airflow webserver
       "
     ports:
-    - "8080:8080"
+    - "8081:8080"
     restart: unless-stopped
 
     deploy:
@@ -117,7 +117,7 @@ services:
       dockerfile: Dockerfile
     env_file: .env
     ports:
-    - "8000:8000"
+    - "8001:8000"
     depends_on:
       postgres:
         condition: service_healthy
@@ -136,7 +136,7 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
     ports:
-    - "3000:80"
+    - "3001:80"
     depends_on:
     - fastapi
     restart: unless-stopped
