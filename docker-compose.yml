@@ -1,7 +1,6 @@
 version: "3.8"
 
 x-airflow-common: &airflow-common
-  image: tbbv2-airflow
   build:
     context: .
     dockerfile: docker/airflow/Dockerfile
@@ -91,6 +90,7 @@ services:
     - allkeys-lru
   airflow-webserver:
     <<: *airflow-common
+    image: tbbv2-airflow-webserver
     container_name: tbbv2-airflow-webserver
     command: >
       bash -c "
@@ -109,6 +109,7 @@ services:
           memory: 3072m
   airflow-scheduler:
     <<: *airflow-common
+    image: tbbv2-airflow-scheduler
     container_name: tbbv2-airflow-scheduler
     command: airflow scheduler
     restart: unless-stopped
