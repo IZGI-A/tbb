@@ -133,14 +133,44 @@ class BankInfoScraper(TBBScraper):
         logger.info("Scraped %d banks from bankalarimiz", len(banks))
         return banks
 
-    def scrape_branches(self, branch_type: str = "Yurtiçi Şube") -> list[dict[str, str]]:
+    def _get_bank_options(self) -> list[dict[str, str]]:
+        """Get available bank options from the bank_select dropdown."""
+        try:
+            bank_select = WebDriverWait(self.driver, 10).until(
+                EC.presence_of_element_located(
+                    (By.CSS_SELECTOR, "select[name*='bank'], #bank_select, select[name='bank_select']")
+                )
+            )
+            sel = Select(bank_select)
+            return [
+                {"value": o.get_attribute("value") or "", "text": o.text.strip()}
+                for o in sel.options
+                if o.text.strip() != "Hepsi"
+            ]
+        except (TimeoutException, NoSuchElementException):
+            return []
+
+    def _select_bank(self, bank_text: str):
+        """Select a specific bank from the bank_select dropdown."""
+        try:
+            bank_select = self.driver.find_element(
+                By.CSS_SELECTOR, "select[name*='bank'], #bank_select, select[name='bank_select']"
+            )
+            sel = Select(bank_select)
+            sel.select_by_visible_text(bank_text)
+            time.sleep(1)
+        except (NoSuchElementException, Exception) as e:
+            logger.warning("Could not select bank '%s': %s", bank_text, e)
+
+    def scrape_branches(self, branch_type: str = "Yurtiçi Şube", bank_name: str | None = None) -> list[dict[str, str]]:
         """Scrape branches or ATMs from the subeler page.
 
         Args:
             branch_type: "Yurtiçi Şube" for domestic branches, "ATM" for ATMs,
                          or other types like "Yurtdışı Şube", "Temsilcilik", etc.
+            bank_name: If provided, filter by this specific bank name.
         """
-        logger.info("Navigating to subeler page (type=%s)", branch_type)
+        logger.info("Navigating to subeler page (type=%s, bank=%s)", branch_type, bank_name or "Hepsi")
         self.driver.get(SUBELER_URL)
         time.sleep(3)
 
@@ -160,6 +190,10 @@ class BankInfoScraper(TBBScraper):
         except (TimeoutException, NoSuchElementException) as e:
             logger.warning("Could not select branch type '%s': %s", branch_type, e)
 
+        # Select specific bank if provided
+        if bank_name:
+            self._select_bank(bank_name)
+
         self._click_listele(timeout=60)
 
         rows = self.parse_table()
@@ -172,14 +206,65 @@ class BankInfoScraper(TBBScraper):
         logger.info("Scraped %d rows for branch type '%s'", len(rows), branch_type)
         return rows
 
+    def scrape_branches_per_bank(self, branch_type: str = "ATM") -> list[dict[str, str]]:
+        """Scrape branches/ATMs bank-by-bank to avoid memory crashes.
+
+        Navigates to the page once to get the bank list, then iterates
+        through each bank with a fresh page load per bank.
+        """
+        logger.info("Navigating to subeler page to get bank list")
+        self.driver.get(SUBELER_URL)
+        time.sleep(3)
+        self._dismiss_cookie_banner()
+
+        bank_options = self._get_bank_options()
+        logger.info("Found %d banks for per-bank scrape", len(bank_options))
+
+        all_rows: list[dict[str, str]] = []
+        for i, bank in enumerate(bank_options):
+            bank_text = bank["text"]
+            try:
+                self._restart_driver()
+                rows = self.scrape_branches(branch_type, bank_name=bank_text)
+                all_rows.extend(rows)
+                logger.info(
+                    "[%d/%d] Bank '%s': %d %s rows (total: %d)",
+                    i + 1, len(bank_options), bank_text, len(rows), branch_type, len(all_rows),
+                )
+            except Exception as e:
+                logger.warning(
+                    "[%d/%d] Bank '%s' failed: %s — skipping",
+                    i + 1, len(bank_options), bank_text, e,
+                )
+        return all_rows
+
+    def _restart_driver(self):
+        """Close and recreate the Chrome driver to free memory."""
+        try:
+            self.driver.quit()
+        except Exception:
+            pass
+        self.driver = self._create_driver()
+
     def scrape_all(self) -> dict[str, Any]:
         """Scrape all bank data: bank list, branches, and ATMs.
+
+        Restarts the browser between each step to prevent tab crashes
+        from excessive memory usage.
 
         Returns dict with keys: banks, branches, atms
         """
         banks = self.scrape_bank_list()
+
+        self._restart_driver()
         branches = self.scrape_branches("Yurtiçi Şube")
-        atms = self.scrape_branches("ATM")
+
+        self._restart_driver()
+        try:
+            atms = self.scrape_branches_per_bank("ATM")
+        except Exception as e:
+            logger.warning("ATM scrape failed: %s — continuing without ATMs", e)
+            atms = []
 
         logger.info(
             "Scrape complete: %d banks, %d branches, %d ATMs",

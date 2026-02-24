@@ -20,7 +20,7 @@ default_args = {
     "owner": "tbb",
     "retries": 2,
     "retry_delay": timedelta(minutes=5),
-    "execution_timeout": timedelta(hours=2),
+    "execution_timeout": timedelta(hours=4),
 }
 
 
@@ -37,8 +37,8 @@ def scrape_data(**context):
         raw_data = scraper.scrape_all()
 
     staging_path = os.path.join(STAGING_DIR, f"raw_{context['ds_nodash']}.json")
-    with open(staging_path, "w") as f:
-        json.dump(raw_data, f, default=str)
+    with open(staging_path, "w", encoding="utf-8") as f:
+        json.dump(raw_data, f, default=str, ensure_ascii=False)
 
     context["ti"].xcom_push(key="staging_path", value=staging_path)
     logger.info("Wrote %d records to %s", len(raw_data), staging_path)
@@ -51,14 +51,14 @@ def transform(**context):
     if not staging_path:
         staging_path = os.path.join(STAGING_DIR, f"raw_{context['ds_nodash']}.json")
         logger.info("XCom miss — falling back to %s", staging_path)
-    with open(staging_path) as f:
+    with open(staging_path, encoding="utf-8") as f:
         raw_data = json.load(f)
 
     transformed = transform_risk_center(raw_data)
 
     output_path = os.path.join(STAGING_DIR, f"transformed_{context['ds_nodash']}.json")
-    with open(output_path, "w") as f:
-        json.dump(transformed, f, default=str)
+    with open(output_path, "w", encoding="utf-8") as f:
+        json.dump(transformed, f, default=str, ensure_ascii=False)
 
     context["ti"].xcom_push(key="transformed_path", value=output_path)
     logger.info("Transformed %d records", len(transformed))
@@ -71,7 +71,7 @@ def load_clickhouse(**context):
     if not transformed_path:
         transformed_path = os.path.join(STAGING_DIR, f"transformed_{context['ds_nodash']}.json")
         logger.info("XCom miss — falling back to %s", transformed_path)
-    with open(transformed_path) as f:
+    with open(transformed_path, encoding="utf-8") as f:
         rows = json.load(f)
 
     count = load_risk_center(rows)

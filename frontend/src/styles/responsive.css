@@ -1,0 +1,121 @@
+/* ===== TBB Responsive Overrides ===== */
+
+@media (max-width: 767px) {
+  /* Typography */
+  h2 {
+    font-size: 16px !important;
+    margin-bottom: 8px !important;
+  }
+  h4 {
+    font-size: 14px !important;
+  }
+
+  /* Statistic cards */
+  .ant-statistic-title {
+    font-size: 12px !important;
+  }
+  .ant-statistic-content-value {
+    font-size: 16px !important;
+  }
+  .ant-statistic-content-suffix {
+    font-size: 12px !important;
+  }
+
+  /* Cards */
+  .ant-card-body {
+    padding: 12px !important;
+  }
+  .ant-card-head {
+    padding: 0 12px !important;
+    min-height: 40px !important;
+  }
+  .ant-card-head-title {
+    font-size: 13px !important;
+  }
+
+  /* Safety: prevent ANY form element from overflowing its container */
+  .ant-select,
+  .ant-input-affix-wrapper,
+  .ant-input-search {
+    max-width: 100% !important;
+  }
+
+  /* Inside Space wrap: full-width stacking */
+  .ant-space-wrap .ant-select,
+  .ant-space-wrap .ant-input-search,
+  .ant-space-wrap .ant-input-affix-wrapper,
+  .ant-space-wrap .ant-picker {
+    width: 100% !important;
+    min-width: unset !important;
+    max-width: 100% !important;
+  }
+  .ant-space-wrap {
+    width: 100% !important;
+  }
+  .ant-space-wrap > .ant-space-item {
+    width: 100% !important;
+  }
+  /* Nested Space inside Space (e.g. YearMonthFilter) */
+  .ant-space-wrap .ant-space {
+    width: 100% !important;
+    flex-wrap: wrap !important;
+  }
+  .ant-space-wrap .ant-space > .ant-space-item {
+    width: 100% !important;
+  }
+
+  /* Table compact */
+  .ant-table {
+    font-size: 12px !important;
+  }
+  .ant-table-thead > tr > th {
+    padding: 6px 8px !important;
+    font-size: 11px !important;
+  }
+  .ant-table-tbody > tr > td {
+    padding: 6px 8px !important;
+  }
+
+  /* Tags smaller */
+  .ant-tag {
+    font-size: 11px !important;
+    padding: 0 4px !important;
+  }
+
+  /* Descriptions */
+  .ant-descriptions-item-label,
+  .ant-descriptions-item-content {
+    font-size: 12px !important;
+    padding: 4px 8px !important;
+  }
+
+  /* Monospace equation blocks */
+  div[style*="monospace"] {
+    font-size: 11px !important;
+    overflow-x: auto !important;
+  }
+
+  /* Tooltip trigger icons */
+  .anticon-info-circle {
+    font-size: 14px !important;
+  }
+
+  /* Collapse panels */
+  .ant-collapse-header {
+    padding: 8px 12px !important;
+    font-size: 13px !important;
+  }
+  .ant-collapse-content-box {
+    padding: 8px !important;
+  }
+}
+
+/* Tablet */
+@media (min-width: 768px) and (max-width: 991px) {
+  h2 {
+    font-size: 20px !important;
+  }
+  .ant-statistic-content-value {
+    font-size: 20px !important;
+  }
+}

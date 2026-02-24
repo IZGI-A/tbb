@@ -30,7 +30,7 @@ const YearMonthFilter: React.FC<YearMonthFilterProps> = ({
     : Array.from({ length: 12 }, (_, i) => ({ value: i + 1, label: monthNames[i] }));
 
   return (
-    <Space>
+    <Space wrap>
       <Select
         placeholder="Yil secin"
         allowClear

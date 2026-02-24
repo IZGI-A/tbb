@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { Card, Col, Row, Statistic, Spin, Select, Space } from 'antd';
+import { Card, Col, Row, Statistic, Spin, Select, Space, Grid } from 'antd';
 import {
   BankOutlined,
   HomeOutlined,
@@ -26,6 +26,8 @@ const Dashboard: React.FC = () => {
   const [ldrYear, setLdrYear] = useState<number>(0);
   const [hhiYear, setHhiYear] = useState<number>(0);
   const [hhiSectors, setHhiSectors] = useState<string[]>([]);
+  const screens = Grid.useBreakpoint();
+  const isMobile = !screens.md;
   const [ratioYear, setRatioYear] = useState<number>(0);
   const [ratioMonth, setRatioMonth] = useState<number>(0);
   const [selectedRatio, setSelectedRatio] = useState<string>('ROA');
@@ -151,7 +153,7 @@ const Dashboard: React.FC = () => {
 
   return (
     <div>
-      <Space style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <Space wrap style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <h2 style={{ margin: 0 }}>Turkiye Bankacilik Sektoru Dashboard</h2>
         <Select
           placeholder="Muhasebe Sistemi"
@@ -321,7 +323,7 @@ const Dashboard: React.FC = () => {
             placeholder="Sektor secin"
             value={hhiSectors}
             onChange={setHhiSectors}
-            style={{ minWidth: 300 }}
+            style={{ minWidth: isMobile ? undefined : 300, width: isMobile ? '100%' : undefined }}
             options={allSectors.map((s) => ({ value: s, label: s }))}
           />
         </Space>

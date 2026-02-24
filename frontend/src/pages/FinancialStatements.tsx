@@ -23,7 +23,7 @@ const FinancialStatements: React.FC = () => {
     limit, offset: (page - 1) * limit,
   });
 
-  const { data: bankNames } = useFinancialBankNames();
+  const { data: bankNames } = useFinancialBankNames(accountingSystem);
   const { data: mainStatements } = useFinancialMainStatements();
   const { data: childStatements } = useFinancialChildStatements(mainStatement);
   const { data: timeSeries, isLoading: tsLoading } = useFinancialTimeSeries({
@@ -108,7 +108,7 @@ const FinancialStatements: React.FC = () => {
             placeholder="Muhasebe Sistemi"
             allowClear
             value={accountingSystem}
-            onChange={(val: string | undefined) => { setAccountingSystem(val); setPage(1); }}
+            onChange={(val: string | undefined) => { setAccountingSystem(val); setBankName(undefined); setPage(1); }}
             style={{ width: 200 }}
             options={[
               { value: 'SOLO', label: 'Solo' },

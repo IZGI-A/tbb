@@ -18,8 +18,8 @@ export const financialApi = {
     apiClient.get('/financial/periods'),
   getTimeSeries: (params: Record<string, unknown>) =>
     apiClient.get('/financial/time-series', { params }),
-  getBankNames: () =>
-    apiClient.get('/financial/bank-names'),
+  getBankNames: (params?: { accounting_system?: string }) =>
+    apiClient.get('/financial/bank-names', { params }),
   getMainStatements: () =>
     apiClient.get('/financial/main-statements'),
   getChildStatements: (params: Record<string, unknown>) =>

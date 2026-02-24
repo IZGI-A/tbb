@@ -1,6 +1,8 @@
-# Dashboard Analiz ve Grafik Dokumantasyonu
+# Analiz ve Grafik Dokumantasyonu
 
-Bu dokuman, TBB (Turkiye Bankalar Birligi) Dashboard sayfasinda yer alan tum grafiklerin ve analizlerin nasil yapildigini aciklamaktadir.
+Bu dokuman, TBB (Turkiye Bankalar Birligi) platformundaki tum sayfalarda yer alan grafiklerin ve analizlerin nasil yapildigini aciklamaktadir.
+
+# Bolum I: Dashboard Analizleri
 
 ---
 
@@ -528,3 +530,294 @@ React Frontend (TanStack Query ile veri cekme + ECharts gorsellestirme)
 | Bolgesel istatistikler | 6 saat | Gunluk guncellenir |
 | Finansal tablolar | 1 saat | Ceyreklik guncellenir |
 | Dashboard stats | 24 saat | Nadiren degisir |
+| Likidite analizi | 1 saat | LC hesaplamalari |
+| Risk analizi | 1 saat | Z-Score hesaplamalari |
+| Panel regresyon | 1 saat | OLS model sonuclari |
+| Bolgesel likidite | 1 saat | Il bazli LC dagitimi |
+
+---
+
+# Bolum II: Likidite Analizi Sayfalari
+
+Asagidaki 5 sayfa, Colak, Deniz, Korkmaz & Yilmaz (2024) "A Panorama of Liquidity Creation in Turkish Banking Industry" (TCMB Working Paper 24/09) calismasinin metodolojisini uygular.
+
+---
+
+## 9. Likidite Analizi (`/liquidity`)
+
+Banka bazinda likidite yaratimi (Liquidity Creation - LC) hesaplamasi ve analizi.
+
+| Ozellik | Deger |
+|---------|-------|
+| **Veri Kaynagi** | ClickHouse `tbb.financial_statements` + PostgreSQL `bank_info` |
+| **API Endpoint'leri** | `/api/liquidity/creation`, `/api/liquidity/time-series`, `/api/liquidity/groups`, `/api/liquidity/group-time-series`, `/api/liquidity/decomposition` |
+| **Filtreler** | Yil, Ay, Muhasebe Sistemi (varsayilan: 2025/9/SOLO) |
+| **Cache TTL** | 1 saat |
+
+### Metodoloji: Bilanco Kalemi Siniflandirmasi (Colak et al. 2024, Table 2)
+
+Berger & Bouwman (2009) metodolojisinin Turk bankacilik sektorune uyarlanmis hali. Bilanco kalemleri likidite ozelliklerine gore siniflandirilir:
+
+**Varliklar (1. VARLIKLAR)**:
+
+| Sinif | Agirlik | Kalemler |
+|-------|---------|----------|
+| Likit | -0.5 | Nakit ve Nakit Benzerleri, GUD Fark K/Z'a Yansitilan FV, GUD Fark DKG'ye Yansitilan FV |
+| Yari Likit | 0.0 | Turev Finansal Varliklar, Kiralama Alacaklari, Faktoring Alacaklari, Itfa Edilmis Maliyet FV, Satis Amacli Varliklar, Ortaklik Yatirimlari, Cari/Ertelenmis Vergi Varligi |
+| Likit Olmayan | +0.5 | Krediler, Maddi Duran Varliklar, Maddi Olmayan Duran Varliklar, Yatirim Amacli Gayrimenkuller, Diger Aktifler |
+
+**Yukumlulukler (2. YUKUMLULUKLER)**:
+
+| Sinif | Agirlik | Kalemler |
+|-------|---------|----------|
+| Likit | +0.5 | Mevduat, Alinan Krediler, Para Piyasalarina Borclar, Fonlar, GUD Fark K/Z'a Yansitilan Finansal Yukumlulukler |
+| Yari Likit | 0.0 | Turev Finansal Yukumlulukler, Faktoring Yukumlulukleri, Karsiliklar, Cari/Ertelenmis Vergi Borcu, Satis Amacli Varlik Borclari, Diger Yukumlulukler |
+| Likit Olmayan | -0.5 | Ihrac Edilen Menkul Kiymetler, Kiralama Yukumlulukleri, Sermaye Benzeri Borclanma Araclari, Ozkaynaklar |
+
+**Nazim Hesaplar (3. NAZIM HESAPLAR)** - sadece Cat Fat olcumunde:
+
+| Sinif | Agirlik | Kalemler |
+|-------|---------|----------|
+| Likit Olmayan | +0.5 | Garanti ve Kefaletler, Cayilamaz Taahhutler |
+| Yari Likit | 0.0 | Turev Finansal Araclar, Cayilabilir Taahhutler |
+
+### Haric Tutulan Bankalar
+
+Sektor aggregate satirlari ve Kalkinma/Yatirim bankalari (Colak et al. 2024 metodolojisi ticari/mevduat bankalarina odaklanir) haric tutulur. Toplam ~30 banka/aggregate satir haric tutulur.
+
+### Muhasebe Sistemi Secimi
+
+`accounting_system` parametresi verilmezse SOLO tercih edilir. Sadece konsolide verisi olan bankalar (ornegin Ziraat, Halk, Vakif, Is Bankasi) icin KONSOLİDE kullanilir. Bu secim 2 hafif DISTINCT sorgusuyla belirlenir.
+
+### Bolumler
+
+#### 9.1 Banka Bazli LC Tablosu
+- Tum mevduat bankalarinin LC (Cat Nonfat + Cat Fat) oranlarini gosterir
+- Toplam aktife gore azalan sirada siralanir
+- Veri saglik kontrolu: herhangi bir bilesen toplam aktifin 10 katini asarsa banka atlanir
+
+#### 9.2 Banka Grubu Bazli LC Karsilastirmasi
+- PostgreSQL `bank_info.sub_bank_group` alanina gore gruplama
+- Agirlikli ortalama: her grubun toplam aktif payi ile agirliklandirilmis LC oranlari
+- Kamusal, Ozel, Yabanci, TMSF gruplari
+
+#### 9.3 Grup Zaman Serisi
+- Kamusal / Ozel / Yabanci 3 ana grup icin donemsel LC trendi
+- `_GROUP_MAP` ile alt gruplar 3 ana gruba eslenir
+- Cizgi grafik - her grup ayri renk
+
+#### 9.4 LC Bilesen (Decomposition) Analizi
+- Secilen banka icin LC'nin hangi bilesenlerden olustugunu gosterir
+- Pozitif katkilar (yesil): Likit olmayan varliklar, likit yukumlulukler
+- Negatif katkilar (kirmizi): Likit varliklar, likit olmayan yuk. + ozkaynak
+- Agirlikli bilesenler toplam aktife bolunmus halde gosterilir
+
+---
+
+## 10. Bolgesel Likidite (`/regional-liquidity`)
+
+Il bazinda likidite yaratimi dagitimi. Her bankanin LC tutari, sube dagilimina oranla illere dagitilir.
+
+| Ozellik | Deger |
+|---------|-------|
+| **Veri Kaynagi** | ClickHouse (LC hesaplama) + PostgreSQL `branch_info` (sube dagitimi) |
+| **API Endpoint** | `GET /api/regional-liquidity/distribution?year={year}&month={month}` |
+| **Filtreler** | Yil, Ay, Muhasebe Sistemi (varsayilan: 2025/9/SOLO) |
+
+### Hesaplama Algoritmasi
+
+```
+1. Her banka icin LC tutari hesaplanir:
+   banka_LC = lc_nonfat * total_assets
+
+2. PostgreSQL'den banka-il sube dagitimi cekilir:
+   SELECT bank_name, city, COUNT(*) FROM branch_info GROUP BY bank_name, city
+
+3. Her banka icin LC tutari illere dagitilir:
+   il_LC += banka_LC * (banka_il_sube_sayisi / banka_toplam_sube_sayisi)
+
+4. Sadece LC hesaplanabilen bankalar dahil edilir
+```
+
+### Bolumler
+
+#### 10.1 Ozet Istatistikler
+4 adet KPI karti:
+- Toplam Il Sayisi
+- Toplam Sube Sayisi
+- En Yuksek LC Olan Il
+- En Yuksek LC Tutari
+
+#### 10.2 En Yuksek LC - Ilk 20 Il
+| Ozellik | Deger |
+|---------|-------|
+| **Grafik Turu** | Yatay bar grafik (mavi gradient, deger etiketli) |
+| **Siralama** | LC tutarina gore azalan |
+
+#### 10.3 Sube Dagilimi - Ilk 20 Il
+| Ozellik | Deger |
+|---------|-------|
+| **Grafik Turu** | Yatay bar grafik (yesil gradient, deger etiketli) |
+| **Siralama** | Sube sayisina gore azalan |
+
+#### 10.4 Tum Iller Tablosu
+- 81 il listesi
+- Sutunlar: Il, LC Tutari, Sube Sayisi, Banka Sayisi, Ort. LC Orani
+- Tum sutunlar siralanabilir
+
+---
+
+## 11. Banka Karsilastirmasi (`/comparison`)
+
+Secilen bankalarin likidite metriklerini detayli olarak karsilastirir.
+
+| Ozellik | Deger |
+|---------|-------|
+| **Veri Kaynagi** | ClickHouse `tbb.financial_statements` |
+| **API Endpoint'leri** | `/api/liquidity/creation`, `/api/liquidity/time-series`, `/api/liquidity/decomposition` |
+| **Filtreler** | Yil, Ay, Muhasebe Sistemi, Banka secimi (maks 8 banka) |
+
+### Bolumler
+
+#### 11.1 LC Karsilastirmasi
+| Ozellik | Deger |
+|---------|-------|
+| **Grafik Turu** | Yatay bar grafik (mavi gradient, deger etiketli) |
+| **Aciklama** | Secilen bankalarin secilen donemdeki LC (Cat Nonfat) oranlarini karsilastirir |
+
+#### 11.2 LC Zaman Serisi Karsilastirmasi
+| Ozellik | Deger |
+|---------|-------|
+| **Grafik Turu** | Cizgi grafik (her banka ayri renk) |
+| **Aciklama** | Secilen bankalarin tum donemlerdeki LC trendlerini gosterir |
+
+#### 11.3 LC Bilesen Analizi
+- Ayri filtreler: Yil, Ay, Muhasebe Sistemi, Tek banka secimi
+- Ozet istatistik kartlari (renk kodlu):
+  - **Mavi arka plan**: LC (Cat Nonfat) orani
+  - **Yesil arka plan**: Pozitif katkilar (Likit Olmayan Varlik, Likit Yukumluluk)
+  - **Kirmizi arka plan**: Negatif katkilar (Likit Varlik, Likit Olm. Yuk. + Ozkaynak)
+- Cubuk grafik: yesil gradient (pozitif) / kirmizi gradient (negatif) bilesen katkilari
+
+---
+
+## 12. Risk Analizi (`/risk`)
+
+Banka risk metrikleri (Z-Score) ve likidite yaratimi iliskisi.
+
+| Ozellik | Deger |
+|---------|-------|
+| **Veri Kaynagi** | ClickHouse `tbb.financial_statements` |
+| **API Endpoint'leri** | `/api/risk-analysis/zscore`, `/api/risk-analysis/zscore-time-series`, `/api/risk-analysis/lc-risk` |
+| **Filtreler** | Yil, Ay, Muhasebe Sistemi (varsayilan: 2025/9/SOLO) |
+
+### Z-Score Hesaplama (Colak et al. 2024, Section IV.III)
+
+```
+Z-Score = (Sermaye Orani + ROA) / sigma(ROA)
+
+Sermaye Orani = Ozkaynaklar / Toplam Aktif
+ROA = Net Kar / Toplam Aktif
+sigma(ROA) = 12 donemlik yuvarlanir pencere standart sapma
+```
+
+- Yuksek Z-Score = dusuk risk (iflastan uzak mesafe)
+- sigma(ROA) icin en az 2 donem gerekli; tek donemde |ROA| proxy olarak kullanilir
+- Pencere icindeki tum ROA degerleri ayni ise yine |ROA| fallback kullanilir
+
+### Banka Grubu Siniflandirmasi
+
+Bankalar 3 gruba ayrilir (sacilim grafigi renk kodlamasi icin):
+- **Kamu**: Ziraat, Halk, Vakiflar
+- **Ozel**: Akbank, Anadolubank, Fibabanka, Sekerbank, Turkish Bank, Is Bankasi, Yapi Kredi
+- **Yabanci**: Diger tum mevduat bankalari
+
+### Bolumler
+
+#### 12.1 Z-Score Siralamasi
+- Tum mevduat bankalarinin Z-Score'una gore azalan sirada tablosu
+- Sutunlar: Banka Adi, Z-Score, ROA (%), Sermaye Orani (%), ROA Std. Sapma, Toplam Aktif, Ozkaynak, Net Kar
+
+#### 12.2 Z-Score Zaman Serisi
+| Ozellik | Deger |
+|---------|-------|
+| **Grafik Turu** | Cizgi grafik |
+| **Aciklama** | Secilen banka veya tum bankalarin donemsel Z-Score trendleri |
+
+#### 12.3 Likidite Yaratimi vs Risk Iliskisi
+| Ozellik | Deger |
+|---------|-------|
+| **Grafik Turu** | Sacilim grafigi (ECharts Scatter) |
+| **X Ekseni** | LC (Cat Nonfat) orani |
+| **Y Ekseni** | Z-Score (risk metrigi) |
+| **Renk Kodlamasi** | Banka grubu (Kamu/Ozel/Yabanci) |
+| **Aciklama** | Her nokta bir bankayi temsil eder. LC ile risk arasindaki iliskiyi gorsellestir |
+
+---
+
+## 13. Panel Regresyon (`/panel-regression`)
+
+Colak et al. (2024) calismasinin regresyon modellerinin 2025/9 verisiyle cross-sectional OLS olarak tekrarlanmasi.
+
+| Ozellik | Deger |
+|---------|-------|
+| **Veri Kaynagi** | ClickHouse `tbb.financial_statements` |
+| **API Endpoint** | `GET /api/panel-regression/results` |
+| **Filtreler** | Muhasebe Sistemi |
+| **Istatistik Kutuphanesi** | statsmodels (Python) |
+
+### Veri Hazirlama
+
+1. ClickHouse'dan 2025/9 donemi icin tum banka verileri cekilir
+2. LC, ROA, sermaye orani, banka buyuklugu hesaplanir
+3. Aykiri deger temizleme: %1 ve %99 percentile'da winsorize
+
+### Modeller
+
+#### Model 1: Sermaye Yeterliligi → Likidite Yaratimi (Eq. 2)
+
+```
+LC_i = alpha + beta * CapitalAdequacy_i + theta1 * BankSize_i + theta2 * ROA_i + epsilon_i
+```
+
+| Degisken | Hesaplama |
+|----------|-----------|
+| LC | cat nonfat / toplam aktif |
+| CapitalAdequacy | (ozkaynak / toplam aktif) - 0.08 |
+| BankSize | ln(toplam aktif) |
+| ROA | net kar / toplam aktif |
+
+#### Model 2: Likidite Yaratimi → Banka Riski (Eq. 5)
+
+```
+ZScore_i = alpha + beta * LC_i + theta1 * BankSize_i + theta2 * ROA_i + epsilon_i
+```
+
+#### Model 3: Kamu Sahipligi → Likidite Yaratimi (Eq. 4)
+
+```
+LC_i = alpha + beta * State_i + theta1 * BankSize_i + theta2 * ROA_i + epsilon_i
+```
+
+| Degisken | Hesaplama |
+|----------|-----------|
+| State | Kamu bankasi = 1, diger = 0 |
+
+### Bolumler
+
+#### 13.1 Model Sonuc Tablolari
+Her model icin:
+- Bagimli degisken, metot (OLS), R-kare, duzeltilmis R-kare
+- Gozlem sayisi, F-istatistigi, F p-degeri
+- Katsayi tablosu: degisken, katsayi, std. hata, t-istatistigi, p-degeri, anlamlilik
+
+#### 13.2 Tanimlayici Istatistikler
+Tum degiskenlerin (LC, Z-Score, sermaye yeterliligi, ROA, banka buyuklugu, kamu sahipligi) ortalama, std. sapma, min, max degerleri.
+
+#### 13.3 Sermaye Yeterliligi vs LC Sacilim Grafigi
+| Ozellik | Deger |
+|---------|-------|
+| **Grafik Turu** | Sacilim grafigi (ECharts Scatter) |
+| **X Ekseni** | Sermaye Yeterliligi (excess over 8%) |
+| **Y Ekseni** | LC (Cat Nonfat) orani |
+| **Renk Kodlamasi** | Banka grubu (Kamu/Ozel/Yabanci) |

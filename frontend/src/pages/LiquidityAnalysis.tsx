@@ -118,8 +118,8 @@ const LiquidityAnalysis: React.FC = () => {
 
       {/* Summary stats */}
       {year && month && (
-        <Row gutter={16} style={{ marginBottom: 16 }}>
-          <Col flex={1}>
+        <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
+          <Col xs={12} md={8}>
             <Card>
               <Statistic
                 title="Sektor Ort. LC"
@@ -128,7 +128,7 @@ const LiquidityAnalysis: React.FC = () => {
               />
             </Card>
           </Col>
-          <Col flex={1}>
+          <Col xs={12} md={8}>
             <Card>
               <Statistic
                 title={
@@ -143,7 +143,7 @@ const LiquidityAnalysis: React.FC = () => {
               />
             </Card>
           </Col>
-          <Col flex={1}>
+          <Col xs={12} md={8}>
             <Card>
               <Statistic
                 title="Banka Sayisi"
@@ -151,7 +151,7 @@ const LiquidityAnalysis: React.FC = () => {
               />
             </Card>
           </Col>
-          <Col flex={1}>
+          <Col xs={12} md={8}>
             <Card>
               <Statistic
                 title="En Yuksek LC"
@@ -162,7 +162,7 @@ const LiquidityAnalysis: React.FC = () => {
               />
             </Card>
           </Col>
-          <Col flex={1}>
+          <Col xs={12} md={8}>
             <Card>
               <Statistic
                 title="En Dusuk LC"

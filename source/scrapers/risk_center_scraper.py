@@ -81,18 +81,19 @@ class RiskCenterScraper(TBBScraper):
         """) or 0
         return cat_count
 
-    def _select_filters(self, report_index: int = 0):
+    def _select_filters(self, report_index: int = 0, cat_count: int = 0):
         """Select filters for a specific report.
 
         Assumes the report has already been clicked via ``_select_report()``.
-        Selects all categories, first 3 periods, and enables value flags.
+        Selects all categories, all periods, and enables value flags.
+        For large category reports (>200), selects periods in smaller batches.
         """
         # Select all categories from the treeview
         self.execute_js("$('#kategorilerList').dxTreeView('instance').selectAll();")
-        time.sleep(1)
+        time.sleep(2 if cat_count > 100 else 1)
 
-        # Select first 3 periods (most recent, format "YYYY-MM")
-        self.select_dx_list_items("yillarList", indices=[0, 1, 2])
+        # Select ALL periods
+        self.select_dx_list_items("yillarList", indices=None)
         time.sleep(1)
 
         # Enable value flags via dxCheckBox + JS selected object
@@ -174,11 +175,14 @@ class RiskCenterScraper(TBBScraper):
         """Full scrape: iterate through all reports and extract data.
 
         For each report:
-        1. Click the report in ``#raporAdiList``
-        2. Wait for categories to reload
-        3. Skip reports with no meaningful categories
+        1. Navigate to a fresh page (clean state)
+        2. Click the report in ``#raporAdiList``
+        3. Wait for categories to reload
         4. Select all categories, periods, and value flags
         5. Generate report and extract pivot data
+
+        Reports with only 1 category still get scraped (they may have
+        valid data without a tree structure).
         """
         self._navigate_to_page()
 
@@ -200,16 +204,18 @@ class RiskCenterScraper(TBBScraper):
 
             try:
                 cat_count = self._select_report(idx)
-                if cat_count <= 1:
-                    # Reports with only "-" or empty categories (e.g. index 12, 18, 19)
-                    logger.info("Skipping report '%s' (only %d categories)", name, cat_count)
+                if cat_count == 0:
+                    logger.info("Skipping report '%s' (0 categories)", name)
+                    self._navigate_to_page()
                     continue
 
                 logger.info("Report '%s' has %d categories", name, cat_count)
 
-                self._select_filters(report_index=idx)
+                self._select_filters(report_index=idx, cat_count=cat_count)
 
-                self.generate_report(wait_seconds=30)
+                # Scale wait time: larger reports need more time to generate
+                wait = min(30 + cat_count // 5, 120)
+                self.generate_report(wait_seconds=wait)
 
                 pivot_records = self.extract_pivot_data()
                 logger.info(
@@ -228,6 +234,9 @@ class RiskCenterScraper(TBBScraper):
 
             except Exception as e:
                 logger.error("Failed report '%s': %s", name, e)
+
+            # Navigate back to page for clean state before next report
+            self._navigate_to_page()
 
         logger.info("Total risk center records scraped: %d", len(all_records))
         return all_records

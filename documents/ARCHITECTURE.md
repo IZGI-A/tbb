@@ -47,7 +47,7 @@ Sistem yukaridan asagiya tek bir dikey akis seklinde okunur.
                                  v
                     ┌─────────────────────────┐
                     │    FastAPI  :8000       │
-                    │    27 REST endpoint     │
+                    │    37 REST endpoint     │
                     │                         │
                     │    Redis :6379 (cache)  │
                     └────────────┬────────────┘
@@ -58,12 +58,17 @@ Sistem yukaridan asagiya tek bir dikey akis seklinde okunur.
                     │    Nginx + React SPA    │
                     │    :3000                │
                     │                         │
-                    │    5 Sayfa:             │
+                    │    10 Sayfa:            │
                     │    - Dashboard          │
                     │    - Mali Tablolar      │
                     │    - Bolgesel Ist.      │
                     │    - Risk Merkezi       │
                     │    - Banka Rehberi      │
+                    │    - Likidite Analizi   │
+                    │    - Bolgesel Likidite  │
+                    │    - Banka Karsilast.   │
+                    │    - Risk Analizi       │
+                    │    - Panel Regresyon    │
                     └────────────┬────────────┘
                                  │
                                  v
@@ -391,24 +396,42 @@ Tum tablolar **ReplacingMergeTree** motoru kullanir. Ayni kayit tekrar yuklendig
 ### Katmanli Mimari
 
 ```
-  ┌───────────────────── ROUTER KATMANI ──────────────────────┐
-  │                                                            │
-  │  financial.py     regions.py    risk_center.py   banks.py  │
-  │  /api/financial/* /api/regions/* /api/risk-center /api/banks│
-  │  (9 endpoint)    (7 endpoint)  (4 endpoint)    (6 endpoint)│
-  └────────┬──────────────┬─────────────┬──────────────┬───────┘
+  ┌──────────────────────────── ROUTER KATMANI ──────────────────────────────┐
+  │                                                                          │
+  │  financial.py     regions.py    risk_center.py   banks.py                │
+  │  /api/financial/* /api/regions/* /api/risk-center /api/banks              │
+  │  (9 endpoint)    (7 endpoint)  (4 endpoint)    (6 endpoint)              │
+  │                                                                          │
+  │  liquidity.py         risk_analysis.py    panel_regression.py            │
+  │  /api/liquidity/*     /api/risk-analysis  /api/panel-regression          │
+  │  (5 endpoint)         (3 endpoint)        (1 endpoint)                   │
+  │                                                                          │
+  │  regional_liquidity.py                                                   │
+  │  /api/regional-liquidity                                                 │
+  │  (1 endpoint)                                                            │
+  └────────┬──────────────┬─────────────┬──────────────┬─────────────────────┘
            |              |             |              |
            v              v             v              v
-  ┌───────────────────── SERVICE KATMANI ─────────────────────┐
-  │                                                            │
-  │  financial_service   region_service  risk_service  bank_   │
-  │  - get_statements    - get_stats     - get_data    service │
-  │  - get_summary       - get_ldr       - get_reports - get_  │
-  │  - get_ratios        - get_hhi       - get_periods  banks  │
-  │  - get_time_series   - get_comparison               - get_ │
-  │  - get_periods       - get_metrics                 branches│
-  │  + 4 daha            + 2 daha                      + 3 daha│
-  └────┬────────────┬─────────────────────────────────┬────────┘
+  ┌──────────────────────────── SERVICE KATMANI ────────────────────────────┐
+  │                                                                          │
+  │  financial_service   region_service  risk_service  bank_service           │
+  │  - get_statements    - get_stats     - get_data    - get_banks           │
+  │  - get_summary       - get_ldr       - get_reports - get_branches        │
+  │  - get_ratios        - get_hhi       - get_periods - get_atms            │
+  │  - get_time_series   - get_comparison               - get_dashboard_stats│
+  │  - get_periods       - get_metrics                  - search             │
+  │  + 4 daha            + 2 daha                       + 1 daha             │
+  │                                                                          │
+  │  liquidity_service          risk_analysis_service                         │
+  │  - get_liquidity_creation   - get_zscore_ranking                         │
+  │  - get_liquidity_time_series- get_zscore_time_series                     │
+  │  - get_liquidity_by_group   - get_lc_risk_relationship                   │
+  │  - get_group_time_series                                                 │
+  │  - get_decomposition        panel_regression_service                     │
+  │                              - run_panel_regressions                     │
+  │  regional_liquidity_service                                              │
+  │  - get_regional_liquidity                                                │
+  └────┬────────────┬─────────────────────────────────┬──────────────────────┘
        |            |                                 |
        v            v                                 v
   ┌────────┐  ┌──────────┐                    ┌──────────┐
@@ -440,6 +463,10 @@ veritabanindan ceker ve sonucu TTL suresiyle Redis'e yazar.
 | Finansal veriler | 1 saat | `fin:ratios:2025:9:SOLO` | Ceyreklik guncellenir |
 | Bolgesel / Risk verileri | 6 saat | `region:ldr:2024` | Aylik guncellenir |
 | Banka bilgileri | 24 saat | `banks:all` | Nadiren degisir |
+| Likidite analizi | 1 saat | `liq:creation:v7:2025:9:SOLO` | LC hesaplamalari |
+| Risk analizi | 1 saat | `risk:zscore:2025:9:SOLO` | Z-Score hesaplamalari |
+| Panel regresyon | 1 saat | `panel:regressions:SOLO` | OLS model sonuclari |
+| Bolgesel likidite | 1 saat | `regional_liq:2025:9:SOLO` | Il bazli LC dagitimi |
 
 ### Gzip Sikistirma (Redis Cache)
 
@@ -510,6 +537,34 @@ Tum 24 cache fonksiyonu merkezi `cache_get`/`cache_set` yardimcilarini kullanir.
   │  ├── ATM Listesi (il/ilce filtreli)                              │
   │  └── Tarihce (kurulus tarihi, onemli olaylar)                    │
   │                                                                  │
+  │  /liquidity - Likidite Analizi (Colak et al. 2024)               │
+  │  ├── Banka bazli LC tablosu (nonfat + fat)                       │
+  │  ├── Banka grubu bazli LC karsilastirmasi                         │
+  │  ├── Grup zaman serisi (Kamusal/Ozel/Yabanci)                    │
+  │  └── LC bilesen (decomposition) analizi                          │
+  │                                                                  │
+  │  /regional-liquidity - Bolgesel Likidite                         │
+  │  ├── Ozet istatistikler (il, sube, en yuksek LC)                │
+  │  ├── En yuksek LC ilk 20 il (Bar)                                │
+  │  ├── Sube dagilimi ilk 20 il (Bar)                               │
+  │  └── Tum iller tablosu (81 il, siralanabilir)                    │
+  │                                                                  │
+  │  /comparison - Banka Karsilastirmasi                             │
+  │  ├── Secilen bankalarin LC karsilastirmasi (Bar)                 │
+  │  ├── LC zaman serisi karsilastirmasi (Line)                      │
+  │  └── LC bilesen analizi (pozitif/negatif katkilar)               │
+  │                                                                  │
+  │  /risk - Risk Analizi                                            │
+  │  ├── Z-Score siralamasi                                          │
+  │  ├── Z-Score zaman serisi                                        │
+  │  └── LC vs Risk iliskisi (Scatter)                               │
+  │                                                                  │
+  │  /panel-regression - Panel Regresyon (Colak et al. 2024)         │
+  │  ├── Model 1: Sermaye Yeterliligi → LC                           │
+  │  ├── Model 2: LC → Banka Riski (Z-Score)                         │
+  │  ├── Model 3: Kamu Sahipligi → LC                                │
+  │  └── Sermaye Yeterliligi vs LC sacilim grafigi                   │
+  │                                                                  │
   └──────────────────────────────────────────────────────────────────┘
           |
           |  Her sayfa icin:
@@ -526,7 +581,10 @@ Tum 24 cache fonksiyonu merkezi `cache_get`/`cache_set` yardimcilarini kullanir.
   ┌──────────────────────────────────────────┐
   │  API Client (Axios)                       │
   │  financialApi.*, regionsApi.*,            │
-  │  banksApi.*, riskCenterApi.*              │
+  │  banksApi.*, riskCenterApi.*,             │
+  │  liquidityApi.*, riskAnalysisApi.*,       │
+  │  panelRegressionApi.*,                    │
+  │  regionalLiquidityApi.*                   │
   └──────────────┬───────────────────────────┘
                  |
                  |  /api/*
@@ -545,6 +603,11 @@ Tum 24 cache fonksiyonu merkezi `cache_get`/`cache_set` yardimcilarini kullanir.
 | `/regions` | RegionalStats | `/regions/stats`, `/regions/list`, `/regions/metrics`, `/regions/periods`, `/regions/comparison` |
 | `/risk-center` | RiskCenter | `/risk-center/data`, `/risk-center/reports`, `/risk-center/periods`, `/risk-center/categories` |
 | `/banks` | BankDirectory | `/banks/`, `/banks/search`, `/banks/{name}/branches`, `/banks/{name}/atms`, `/banks/{name}/history` |
+| `/liquidity` | LiquidityAnalysis | `/liquidity/creation`, `/liquidity/time-series`, `/liquidity/groups`, `/liquidity/group-time-series`, `/liquidity/decomposition` |
+| `/regional-liquidity` | RegionalLiquidity | `/regional-liquidity/distribution` |
+| `/comparison` | BankComparison | `/liquidity/creation`, `/liquidity/time-series`, `/liquidity/decomposition`, `/financial/bank-names` |
+| `/risk` | RiskAnalysis | `/risk-analysis/zscore`, `/risk-analysis/zscore-time-series`, `/risk-analysis/lc-risk` |
+| `/panel-regression` | PanelRegression | `/panel-regression/results` |
 
 ---
 
@@ -748,9 +811,11 @@ tbb/
 │   ├── nginx.conf                 # Reverse proxy
 │   └── src/
 │       ├── api/client.ts          # Axios API istemcisi
-│       ├── components/charts/     # LineChart, BarChart, PieChart
-│       ├── hooks/                 # TanStack Query hooklari
-│       ├── pages/                 # Dashboard, Financial, Regions, Risk, Banks
+│       ├── components/charts/     # LineChart, BarChart, PieChart, ScatterChart
+│       ├── hooks/                 # TanStack Query hooklari (8 hook modulu)
+│       ├── pages/                 # 10 sayfa (Dashboard, Financial, Regions,
+│       │                          #   Risk, Banks, Liquidity, RegionalLiquidity,
+│       │                          #   BankComparison, RiskAnalysis, PanelRegression)
 │       └── types/index.ts         # TypeScript tip tanimlari
 ├── source/
 │   ├── config.py                  # Merkezi konfigurasyoni

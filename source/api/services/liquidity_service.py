@@ -460,7 +460,7 @@ async def get_liquidity_by_group(
     accounting_system: str | None = None,
 ) -> list[dict]:
     """LC weighted average by bank ownership group."""
-    cache_key = f"liq:groups:v7:{year}:{month}:{accounting_system}"
+    cache_key = f"liq:groups:v9:{year}:{month}:{accounting_system}"
     cached = await cache_get(redis, cache_key)
     if cached:
         return cached
@@ -593,7 +593,8 @@ async def get_liquidity_decomposition(
 # ---------------------------------------------------------------------------
 # Group time series — Figure 2 from Çolak et al. (2024)
 # ---------------------------------------------------------------------------
-# Mapping sub_bank_group → paper's 3 main groups
+# Mapping sub_bank_group → paper's 3 main groups (mevduat banks only,
+# kalkınma/yatırım banks excluded per paper methodology)
 _GROUP_MAP = {
     "Kamusal Sermayeli Mevduat Bankaları": "Kamusal",
     "Özel Sermayeli Mevduat Bankaları": "Özel",
@@ -610,7 +611,7 @@ async def get_liquidity_group_time_series(
     accounting_system: str | None = None,
 ) -> list[dict]:
     """LC time series by bank ownership group (Kamusal / Özel / Yabancı)."""
-    cache_key = f"liq:grpts:v7:{accounting_system}"
+    cache_key = f"liq:grpts:v11:{accounting_system}"
     cached = await cache_get(redis, cache_key)
     if cached:
         return cached

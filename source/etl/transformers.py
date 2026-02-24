@@ -52,6 +52,20 @@ def _parse_date(text: Any) -> str | None:
     return None
 
 
+def _fix_encoding(text: str) -> str:
+    """Fix double UTF-8 encoding (UTF-8 bytes misread as Latin-1).
+
+    Example: "Ä°brazÄ±nda" → "İbrazında"
+    """
+    if not text or not isinstance(text, str):
+        return text
+    try:
+        fixed = text.encode("latin-1").decode("utf-8")
+        return fixed
+    except (UnicodeDecodeError, UnicodeEncodeError):
+        return text
+
+
 def _first_of(*keys, record: dict, default: Any = "") -> Any:
     """Return the first non-empty value found for the given keys in *record*."""
     for k in keys:
@@ -155,14 +169,14 @@ def transform_risk_center(raw_records: list[dict]) -> list[dict]:
     """Transform scraped risk center table rows into ClickHouse-ready dicts."""
     rows = []
     for record in raw_records:
-        report_name = _first_of(
+        report_name = _fix_encoding(_first_of(
             "_report_text", "Rapor Adı", "Rapor",
             record=record,
-        )
-        category = _first_of(
+        ))
+        category = _fix_encoding(_first_of(
             "Kategori", "col_0",
             record=record,
-        )
+        ))
         person_count = _safe_int(
             _first_of(
                 "Tekil Kişi Sayısı", "Kişi Sayısı", "col_1",

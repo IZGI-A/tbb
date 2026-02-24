@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Card, Select, Space, Table, Row, Col, Statistic, Tooltip, Tag } from 'antd';
+import { Card, Select, Space, Table, Row, Col, Statistic, Tooltip, Tag, Grid } from 'antd';
 import { InfoCircleOutlined } from '@ant-design/icons';
 import ScatterChart from '../components/charts/ScatterChart';
 import LineChart from '../components/charts/LineChart';
@@ -18,6 +18,8 @@ const RiskAnalysis: React.FC = () => {
   const [month, setMonth] = useState<number | undefined>(9);
   const [accountingSystem, setAccountingSystem] = useState<string | undefined>('SOLO');
   const [selectedBank, setSelectedBank] = useState<string | undefined>();
+  const screens = Grid.useBreakpoint();
+  const isMobile = !screens.md;
 
   const { data: periods } = useFinancialPeriods();
   const periodList = (periods ?? []) as PeriodInfo[];
@@ -157,8 +159,8 @@ const RiskAnalysis: React.FC = () => {
 
       {/* Summary Stats */}
       {year && month && zscore && (
-        <Row gutter={16} style={{ marginBottom: 16 }}>
-          <Col flex={1}>
+        <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
+          <Col xs={12} md={12} lg={6}>
             <Card>
               <Statistic
                 title="Ort. Z-Score"
@@ -166,7 +168,7 @@ const RiskAnalysis: React.FC = () => {
               />
             </Card>
           </Col>
-          <Col flex={1}>
+          <Col xs={12} md={12} lg={6}>
             <Card>
               <Statistic
                 title="Banka Sayisi"
@@ -174,7 +176,7 @@ const RiskAnalysis: React.FC = () => {
               />
             </Card>
           </Col>
-          <Col flex={1}>
+          <Col xs={12} md={12} lg={6}>
             <Card>
               <Statistic
                 title="En Yuksek Z-Score"
@@ -183,7 +185,7 @@ const RiskAnalysis: React.FC = () => {
               />
             </Card>
           </Col>
-          <Col flex={1}>
+          <Col xs={12} md={12} lg={6}>
             <Card>
               <Statistic
                 title="En Dusuk Z-Score"
@@ -198,7 +200,7 @@ const RiskAnalysis: React.FC = () => {
       {/* LC vs Z-Score Scatter + Risk Distribution */}
       {year && month && lcRisk && lcRisk.length > 0 && (
         <Row gutter={16} style={{ marginBottom: 16 }}>
-          <Col span={16}>
+          <Col xs={24} lg={16}>
             <Card
               title={
                 <span>
@@ -214,18 +216,37 @@ const RiskAnalysis: React.FC = () => {
                 title=""
                 xLabel="LC Nonfat (%)"
                 yLabel="Z-Score"
-                data={lcRisk.map(d => ({
-                  name: d.bank_name,
-                  value: [
-                    Number((d.lc_nonfat * 100).toFixed(2)),
-                    Number((d.z_score ?? 0).toFixed(2)),
-                  ],
-                }))}
+                groups={[
+                  {
+                    name: 'Kamu',
+                    color: '#cf1322',
+                    data: lcRisk.filter(d => d.bank_group === 'Kamu').map(d => ({
+                      name: d.bank_name,
+                      value: [Number((d.lc_nonfat * 100).toFixed(2)), Number((d.z_score ?? 0).toFixed(2))],
+                    })),
+                  },
+                  {
+                    name: 'Ozel',
+                    color: '#1677ff',
+                    data: lcRisk.filter(d => d.bank_group === 'Ozel').map(d => ({
+                      name: d.bank_name,
+                      value: [Number((d.lc_nonfat * 100).toFixed(2)), Number((d.z_score ?? 0).toFixed(2))],
+                    })),
+                  },
+                  {
+                    name: 'Yabanci',
+                    color: '#389e0d',
+                    data: lcRisk.filter(d => d.bank_group === 'Yabanci').map(d => ({
+                      name: d.bank_name,
+                      value: [Number((d.lc_nonfat * 100).toFixed(2)), Number((d.z_score ?? 0).toFixed(2))],
+                    })),
+                  },
+                ]}
                 loading={lcRiskLoading}
               />
             </Card>
           </Col>
-          <Col span={8}>
+          <Col xs={24} lg={8}>
             <Card title="Risk Seviyesi Dagilimi" style={{ height: '100%' }}>
               <PieChart
                 title=""

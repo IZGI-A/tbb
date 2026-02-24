@@ -1,10 +1,23 @@
-"""Airflow DAG for TBB Financial Statements ETL pipeline.
+"""Airflow DAGs for TBB Financial Statements ETL pipeline.
+
+Two independent DAGs:
+  - tbb_financial_solo:         TFRS9-SOLO statements
+  - tbb_financial_consolidated: TFRS9-KONSOLIDE statements
 
 Schedule: Weekly (Monday 06:00 UTC)
-Chain: scrape_solo → transform_solo → load_solo → scrape_consolidated → transform_consolidated → load_consolidated
+Chain (each DAG): scrape → transform → load
 
-Solo and consolidated are scraped sequentially to avoid Chrome tab crashes
-from excessive memory usage.
+Period selection (oncelik sirasi):
+  1. --conf ile verilen period_keys (en yuksek oncelik)
+  2. dags/config/financial_periods.json dosyasindaki period_keys
+  3. Bos liste = sadece en son donem (site varsayilani)
+
+Ornekler:
+  # --conf ile belirli donemler
+  airflow dags trigger tbb_financial_solo --conf '{"period_keys": [139, 138, 137]}'
+
+  # config dosyasindan (dags/config/financial_periods.json duzenle)
+  airflow dags trigger tbb_financial_solo
 """
 
 import json
@@ -13,17 +26,19 @@ import logging
 from datetime import datetime, timedelta
 
 from airflow import DAG
+from airflow.models.param import Param
 from airflow.operators.python import PythonOperator
 
 logger = logging.getLogger(__name__)
 
 STAGING_DIR = "/tmp/tbb_staging/financial"
+PERIODS_CONFIG = os.path.join(os.path.dirname(__file__), "config", "financial_periods.json")
 
 default_args = {
     "owner": "tbb",
     "retries": 2,
     "retry_delay": timedelta(minutes=5),
-    "execution_timeout": timedelta(hours=2),
+    "execution_timeout": timedelta(hours=4),
 }
 
 
@@ -31,19 +46,60 @@ def _ensure_staging_dir():
     os.makedirs(STAGING_DIR, exist_ok=True)
 
 
+def _load_period_keys_from_config() -> list[int]:
+    """Read period_keys from dags/config/financial_periods.json."""
+    try:
+        with open(PERIODS_CONFIG, encoding="utf-8") as f:
+            data = json.load(f)
+        return data.get("period_keys", [])
+    except (FileNotFoundError, json.JSONDecodeError):
+        return []
+
+
+def _resolve_period_keys(context) -> list[int] | None:
+    """Determine which period keys to use.
+
+    Priority:
+      1. --conf '{"period_keys": [...]}' (highest)
+      2. dags/config/financial_periods.json
+      3. Empty → None (site default = most recent period)
+    """
+    # 1. From --conf (DAG params)
+    keys = context["params"].get("period_keys")
+    if keys:
+        logger.info("Period keys from --conf: %s", keys)
+        return keys
+
+    # 2. From config file
+    keys = _load_period_keys_from_config()
+    if keys:
+        logger.info("Period keys from config file: %s", keys)
+        return keys
+
+    # 3. Default
+    logger.info("No period keys specified — using site default (most recent)")
+    return None
+
+
 def _scrape_table(table_key: str, **context):
     from scrapers.financial_scraper import FinancialScraper
 
     _ensure_staging_dir()
 
-    with FinancialScraper() as scraper:
-        raw_data = scraper.scrape_all(table_keys=[table_key])
+    period_keys = _resolve_period_keys(context)
 
+    with FinancialScraper() as scraper:
+        raw_data = scraper.scrape_all(
+            table_keys=[table_key], period_keys=period_keys,
+        )
+
+    # Write as JSONL (one JSON object per line) to enable streaming reads
     staging_path = os.path.join(
-        STAGING_DIR, f"raw_{table_key}_{context['ds_nodash']}.json"
+        STAGING_DIR, f"raw_{table_key}_{context['ds_nodash']}.jsonl"
     )
-    with open(staging_path, "w") as f:
-        json.dump(raw_data, f, default=str)
+    with open(staging_path, "w", encoding="utf-8") as f:
+        for record in raw_data:
+            f.write(json.dumps(record, default=str, ensure_ascii=False) + "\n")
 
     context["ti"].xcom_push(key=f"staging_path_{table_key}", value=staging_path)
     logger.info("Wrote %d %s records to %s", len(raw_data), table_key, staging_path)
@@ -56,23 +112,53 @@ def _transform_table(table_key: str, **context):
         task_ids=f"scrape_{table_key}", key=f"staging_path_{table_key}"
     )
     if not staging_path:
+        # Try JSONL first, fall back to old JSON format
         staging_path = os.path.join(
-            STAGING_DIR, f"raw_{table_key}_{context['ds_nodash']}.json"
+            STAGING_DIR, f"raw_{table_key}_{context['ds_nodash']}.jsonl"
         )
+        if not os.path.exists(staging_path):
+            staging_path = os.path.join(
+                STAGING_DIR, f"raw_{table_key}_{context['ds_nodash']}.json"
+            )
         logger.info("XCom miss — falling back to %s", staging_path)
-    with open(staging_path) as f:
-        raw_data = json.load(f)
-
-    transformed = transform_financial(raw_data)
 
     output_path = os.path.join(
-        STAGING_DIR, f"transformed_{table_key}_{context['ds_nodash']}.json"
+        STAGING_DIR, f"transformed_{table_key}_{context['ds_nodash']}.jsonl"
     )
-    with open(output_path, "w") as f:
-        json.dump(transformed, f, default=str)
+
+    # Stream processing: read line by line, transform in batches, write
+    BATCH_SIZE = 50000
+    total = 0
+    batch = []
+
+    with open(output_path, "w", encoding="utf-8") as out_f:
+        if staging_path.endswith(".jsonl"):
+            # JSONL format: one record per line
+            with open(staging_path, encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    batch.append(json.loads(line))
+                    if len(batch) >= BATCH_SIZE:
+                        transformed = transform_financial(batch)
+                        for row in transformed:
+                            out_f.write(json.dumps(row, default=str, ensure_ascii=False) + "\n")
+                        total += len(transformed)
+                        batch = []
+        else:
+            # Legacy JSON array format
+            with open(staging_path, encoding="utf-8") as f:
+                batch = json.load(f)
+
+        if batch:
+            transformed = transform_financial(batch)
+            for row in transformed:
+                out_f.write(json.dumps(row, default=str, ensure_ascii=False) + "\n")
+            total += len(transformed)
 
     context["ti"].xcom_push(key=f"transformed_path_{table_key}", value=output_path)
-    logger.info("Transformed %d %s records", len(transformed), table_key)
+    logger.info("Transformed %d %s records", total, table_key)
 
 
 def _load_table(table_key: str, **context):
@@ -83,14 +169,53 @@ def _load_table(table_key: str, **context):
     )
     if not transformed_path:
         transformed_path = os.path.join(
-            STAGING_DIR, f"transformed_{table_key}_{context['ds_nodash']}.json"
+            STAGING_DIR, f"transformed_{table_key}_{context['ds_nodash']}.jsonl"
         )
+        if not os.path.exists(transformed_path):
+            transformed_path = os.path.join(
+                STAGING_DIR, f"transformed_{table_key}_{context['ds_nodash']}.json"
+            )
         logger.info("XCom miss — falling back to %s", transformed_path)
-    with open(transformed_path) as f:
-        rows = json.load(f)
 
-    count = load_financial_statements(rows)
-    logger.info("Loaded %d %s rows into ClickHouse", count, table_key)
+    # Stream load: read in batches to avoid OOM
+    BATCH_SIZE = 50000
+    total = 0
+
+    if transformed_path.endswith(".jsonl"):
+        batch = []
+        with open(transformed_path, encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                batch.append(json.loads(line))
+                if len(batch) >= BATCH_SIZE:
+                    total += load_financial_statements(batch)
+                    batch = []
+        if batch:
+            total += load_financial_statements(batch)
+    else:
+        # Legacy JSON array format
+        with open(transformed_path, encoding="utf-8") as f:
+            rows = json.load(f)
+        total = load_financial_statements(rows)
+
+    logger.info("Loaded %d %s rows into ClickHouse", total, table_key)
+
+
+# --- DAG params shared by both DAGs ---
+
+dag_params = {
+    "period_keys": Param(
+        default=[],
+        type="array",
+        description=(
+            "Period ID keys to scrape. Leave empty for the most recent "
+            "period (site default). Use FinancialScraper._get_available_periods() "
+            "to discover valid keys."
+        ),
+    ),
+}
 
 
 # --- Task factory functions (closures for PythonOperator) ---
@@ -114,15 +239,18 @@ def load_consolidated(**ctx):
     _load_table("consolidated", **ctx)
 
 
+# ── DAG 1: Solo ─────────────────────────────────────────────────
+
 with DAG(
-    dag_id="tbb_financial_statements",
+    dag_id="tbb_financial_solo",
     default_args=default_args,
-    description="TBB Financial Statements ETL Pipeline (Solo + Consolidated)",
+    description="TBB Financial Statements ETL Pipeline (Solo)",
     schedule_interval="0 6 * * 1",  # Monday 06:00
     start_date=datetime(2024, 1, 1),
     catchup=False,
-    tags=["tbb", "financial"],
-) as dag:
+    tags=["tbb", "financial", "solo"],
+    params=dag_params,
+) as dag_solo:
 
     t_scrape_solo = PythonOperator(
         task_id="scrape_solo",
@@ -137,6 +265,22 @@ with DAG(
         python_callable=load_solo,
     )
 
+    t_scrape_solo >> t_transform_solo >> t_load_solo
+
+
+# ── DAG 2: Consolidated ─────────────────────────────────────────
+
+with DAG(
+    dag_id="tbb_financial_consolidated",
+    default_args=default_args,
+    description="TBB Financial Statements ETL Pipeline (Consolidated)",
+    schedule_interval="0 6 * * 1",  # Monday 06:00
+    start_date=datetime(2024, 1, 1),
+    catchup=False,
+    tags=["tbb", "financial", "consolidated"],
+    params=dag_params,
+) as dag_consolidated:
+
     t_scrape_cons = PythonOperator(
         task_id="scrape_consolidated",
         python_callable=scrape_consolidated,
@@ -150,5 +294,4 @@ with DAG(
         python_callable=load_consolidated,
     )
 
-    # Sequential: solo pipeline → consolidated pipeline
-    t_scrape_solo >> t_transform_solo >> t_load_solo >> t_scrape_cons >> t_transform_cons >> t_load_cons
+    t_scrape_cons >> t_transform_cons >> t_load_cons

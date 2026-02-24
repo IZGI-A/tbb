@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Layout, Menu } from 'antd';
+import { Layout, Menu, Grid, Drawer, Button } from 'antd';
 import {
   DashboardOutlined,
   BarChartOutlined,
@@ -11,6 +11,7 @@ import {
   SafetyOutlined,
   FundOutlined,
   EnvironmentOutlined,
+  MenuOutlined,
 } from '@ant-design/icons';
 import { useNavigate, useLocation, Outlet } from 'react-router-dom';
 
@@ -37,49 +38,104 @@ const menuItems = [
 
 const AppLayout: React.FC = () => {
   const [collapsed, setCollapsed] = useState(false);
+  const [drawerVisible, setDrawerVisible] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
+  const screens = Grid.useBreakpoint();
+  const isMobile = !screens.md;
+
+  const handleMenuClick = ({ key }: { key: string }) => {
+    navigate(key);
+    if (isMobile) setDrawerVisible(false);
+  };
+
+  const menuContent = (
+    <Menu
+      theme="dark"
+      mode="inline"
+      selectedKeys={[location.pathname]}
+      items={menuItems}
+      onClick={handleMenuClick}
+    />
+  );
+
+  const logo = (show: boolean) => (
+    <div style={{
+      height: 64,
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      color: '#fff',
+      fontSize: show ? 20 : 16,
+      fontWeight: 'bold',
+    }}>
+      {show ? 'TBB Data Platform' : 'TBB'}
+    </div>
+  );
 
   return (
     <Layout style={{ minHeight: '100vh' }}>
-      <Sider
-        collapsible
-        collapsed={collapsed}
-        onCollapse={setCollapsed}
-        theme="dark"
-      >
-        <div style={{
-          height: 64,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          color: '#fff',
-          fontSize: collapsed ? 16 : 20,
-          fontWeight: 'bold',
-        }}>
-          {collapsed ? 'TBB' : 'TBB Data Platform'}
-        </div>
-        <Menu
+      {/* Desktop Sidebar */}
+      {!isMobile && (
+        <Sider
+          collapsible
+          collapsed={collapsed}
+          onCollapse={setCollapsed}
           theme="dark"
-          mode="inline"
-          selectedKeys={[location.pathname]}
-          items={menuItems}
-          onClick={({ key }) => navigate(key)}
-        />
-      </Sider>
+        >
+          {logo(!collapsed)}
+          {menuContent}
+        </Sider>
+      )}
+
+      {/* Mobile Drawer */}
+      {isMobile && (
+        <Drawer
+          placement="left"
+          onClose={() => setDrawerVisible(false)}
+          open={drawerVisible}
+          width={256}
+          styles={{ body: { padding: 0, background: '#001529' } }}
+          closable={false}
+        >
+          {logo(true)}
+          {menuContent}
+        </Drawer>
+      )}
+
       <Layout>
         <Header style={{
-          padding: '0 24px',
+          padding: isMobile ? '0 12px' : '0 24px',
           background: '#fff',
           display: 'flex',
           alignItems: 'center',
-          fontSize: 18,
+          fontSize: isMobile ? 14 : 18,
           fontWeight: 500,
           borderBottom: '1px solid #f0f0f0',
+          gap: 12,
         }}>
-          Turkiye Bankalar Birligi - Veri Platformu
+          {isMobile && (
+            <Button
+              type="text"
+              icon={<MenuOutlined />}
+              onClick={() => setDrawerVisible(true)}
+              style={{ fontSize: 18 }}
+            />
+          )}
+          <span style={{
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+          }}>
+            {isMobile ? 'TBB Veri Platformu' : 'Turkiye Bankalar Birligi - Veri Platformu'}
+          </span>
         </Header>
-        <Content style={{ margin: 24, padding: 24, background: '#fff', borderRadius: 8 }}>
+        <Content style={{
+          margin: isMobile ? 8 : 24,
+          padding: isMobile ? 12 : 24,
+          background: '#fff',
+          borderRadius: 8,
+        }}>
           <Outlet />
         </Content>
       </Layout>

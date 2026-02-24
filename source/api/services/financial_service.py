@@ -144,14 +144,19 @@ async def get_periods(ch: Client, redis: aioredis.Redis) -> list[dict]:
     return data
 
 
-async def get_bank_names(ch: Client, redis: aioredis.Redis) -> list[str]:
-    cache_key = "fin:bank_names"
+async def get_bank_names(ch: Client, redis: aioredis.Redis, accounting_system: str | None = None) -> list[str]:
+    cache_key = f"fin:bank_names:{accounting_system}"
     cached = await cache_get(redis, cache_key)
     if cached:
         return cached
 
-    query = "SELECT DISTINCT bank_name FROM tbb.financial_statements FINAL ORDER BY bank_name"
-    rows = ch.execute(query)
+    query = "SELECT DISTINCT bank_name FROM tbb.financial_statements FINAL"
+    params = {}
+    if accounting_system:
+        query += " WHERE accounting_system LIKE %(accounting_system)s"
+        params["accounting_system"] = f"%{accounting_system.upper()}%"
+    query += " ORDER BY bank_name"
+    rows = ch.execute(query, params)
     data = [r[0] for r in rows]
 
     await cache_set(redis, cache_key, data, CACHE_TTL)

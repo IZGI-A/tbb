@@ -10,8 +10,8 @@ x-airflow-common: &airflow-common
   volumes:
   - ./dags:/opt/airflow/dags
   - ./source:/opt/airflow/source
-  - airflow-logs:/opt/airflow/logs
-  - staging-data:/tmp/tbb_staging
+  - tbbv2-airflow-logs:/opt/airflow/logs
+  - tbbv2-staging-data:/tmp/tbb_staging
   depends_on:
     postgres:
       condition: service_healthy
@@ -22,6 +22,7 @@ x-airflow-common: &airflow-common
 
 services:
   postgres:
+    container_name: tbbv2-postgres
     image: postgres:16-alpine
     env_file: .env
     command:
@@ -33,7 +34,7 @@ services:
     ports:
     - "5432:5432"
     volumes:
-    - postgres-data:/var/lib/postgresql/data
+    - tbbv2-postgres-data:/var/lib/postgresql/data
     - ./docker/postgres/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-tbb_user} -d ${POSTGRES_DB:-tbb}"]
@@ -44,14 +45,15 @@ services:
     deploy:
       resources:
         limits:
-          memory: 2112m
+          memory: 1536m
   clickhouse:
+    container_name: tbbv2-clickhouse
     image: clickhouse/clickhouse-server:24.1
     ports:
     - "8123:8123"
     - "9000:9000"
     volumes:
-    - clickhouse-data:/var/lib/clickhouse
+    - tbbv2-clickhouse-data:/var/lib/clickhouse
     - ./docker/clickhouse/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
     healthcheck:
       test: ["CMD", "clickhouse-client", "--query", "SELECT 1"]
@@ -64,11 +66,12 @@ services:
         limits:
           memory: 3456m
   redis:
+    container_name: tbbv2-redis
     image: redis:7-alpine
     ports:
     - "6379:6379"
     volumes:
-    - redis-data:/data
+    - tbbv2-redis-data:/data
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
@@ -78,15 +81,17 @@ services:
     deploy:
       resources:
         limits:
-          memory: 704m
+          memory: 512m
     command:
     - redis-server
     - --maxmemory
-    - 633mb
+    - 450mb
     - --maxmemory-policy
     - allkeys-lru
   airflow-webserver:
     <<: *airflow-common
+    image: tbbv2-airflow-webserver
+    container_name: tbbv2-airflow-webserver
     command: >
       bash -c "
         airflow db migrate &&
@@ -101,17 +106,21 @@ services:
     deploy:
       resources:
         limits:
-          memory: 1728m
+          memory: 3072m
   airflow-scheduler:
     <<: *airflow-common
+    image: tbbv2-airflow-scheduler
+    container_name: tbbv2-airflow-scheduler
     command: airflow scheduler
     restart: unless-stopped
 
     deploy:
       resources:
         limits:
-          memory: 1408m
+          memory: 4096m
   fastapi:
+    container_name: tbbv2-fastapi
+    image: tbbv2-fastapi
     build:
       context: ./source
       dockerfile: Dockerfile
@@ -130,8 +139,10 @@ services:
     deploy:
       resources:
         limits:
-          memory: 1152m
+          memory: 1024m
   frontend:
+    container_name: tbbv2-frontend
+    image: tbbv2-frontend
     build:
       context: ./frontend
       dockerfile: Dockerfile
@@ -144,10 +155,10 @@ services:
     deploy:
       resources:
         limits:
-          memory: 512m
+          memory: 256m
 volumes:
-  postgres-data:
-  clickhouse-data:
-  redis-data:
-  airflow-logs:
-  staging-data:
+  tbbv2-postgres-data:
+  tbbv2-clickhouse-data:
+  tbbv2-redis-data:
+  tbbv2-airflow-logs:
+  tbbv2-staging-data:

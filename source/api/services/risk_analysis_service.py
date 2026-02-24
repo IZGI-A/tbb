@@ -31,6 +31,7 @@ _STATE_BANKS = {
     "Türkiye Cumhuriyeti Ziraat Bankası A.Ş.",
     "Türkiye Halk Bankası A.Ş.",
     "Türkiye Vakıflar Bankası T.A.O.",
+    "Ziraat Dinamik Banka A.Ş. (dijital banka)",
 }
 
 _PRIVATE_BANKS = {

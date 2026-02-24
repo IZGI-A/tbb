@@ -57,10 +57,13 @@ async def periods(redis=Depends(get_redis_client)):
 
 
 @router.get("/bank-names")
-async def bank_names(redis=Depends(get_redis_client)):
+async def bank_names(
+    accounting_system: str | None = Query(None),
+    redis=Depends(get_redis_client),
+):
     ch = get_ch()
     try:
-        return await financial_service.get_bank_names(ch, redis)
+        return await financial_service.get_bank_names(ch, redis, accounting_system=accounting_system)
     finally:
         ch.disconnect()
 
