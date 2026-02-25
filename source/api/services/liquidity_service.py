@@ -593,14 +593,15 @@ async def get_liquidity_decomposition(
 # ---------------------------------------------------------------------------
 # Group time series — Figure 2 from Çolak et al. (2024)
 # ---------------------------------------------------------------------------
-# Mapping sub_bank_group → paper's 3 main groups (mevduat banks only,
-# kalkınma/yatırım banks excluded per paper methodology)
+# Mapping sub_bank_group → paper's 2 groups: "State Banks" vs "Other Banks"
+# as in Figure 2 of Çolak, Deniz, Korkmaz & Yılmaz (2024), TCMB WP 24/09.
+# State Banks = kamusal sermayeli mevduat bankaları (Ziraat, Halk, Vakıf)
+# Other Banks = özel sermayeli + yabancı sermayeli mevduat bankaları
 _GROUP_MAP = {
-    "Kamusal Sermayeli Mevduat Bankaları": "Kamusal",
-    "Özel Sermayeli Mevduat Bankaları": "Özel",
-    "Türkiye´de Kurulmuş Yabancı Sermayeli Bankalar": "Yabancı",
-    "Türkiye´de Şube Açan Yabancı Sermayeli Bankalar": "Yabancı",
-    "Tasarruf Mevduatı Sigorta Fonuna Devredilen Bankalar": "TMSF",
+    "Kamusal Sermayeli Mevduat Bankaları": "State Banks",
+    "Özel Sermayeli Mevduat Bankaları": "Other Banks",
+    "Türkiye´de Kurulmuş Yabancı Sermayeli Bankalar": "Other Banks",
+    "Türkiye´de Şube Açan Yabancı Sermayeli Bankalar": "Other Banks",
 }
 
 
@@ -610,8 +611,8 @@ async def get_liquidity_group_time_series(
     pg: asyncpg.Pool,
     accounting_system: str | None = None,
 ) -> list[dict]:
-    """LC time series by bank ownership group (Kamusal / Özel / Yabancı)."""
-    cache_key = f"liq:grpts:v11:{accounting_system}"
+    """LC time series by bank ownership group (State Banks / Other Banks)."""
+    cache_key = f"liq:grpts:v12:{accounting_system}"
     cached = await cache_get(redis, cache_key)
     if cached:
         return cached
