@@ -80,17 +80,17 @@ _LIQUID_LIABILITIES = (
 _SEMI_LIQUID_LIABILITIES = (
     "VII. TÜREV FİNANSAL YÜKÜMLÜLÜKLER",                                   # derivative liabilities
     "VIII. FAKTORİNG YÜKÜMLÜLÜKLERİ",                                     # factoring liabilities
-    "X. KARŞILIKLAR",                                                       # provisions (paper: semi-liquid)
-    "XI. CARİ VERGİ BORCU",                                                # taxes, duties (paper: semi-liquid)
-    "XII. ERTELENMİŞ VERGİ BORCU",                                         # deferred tax (paper: semi-liquid)
+    "XII. ERTELENMİŞ VERGİ BORCU",                                         # deferred tax
     "XIII. SATIŞ AMAÇLI ELDE TUTU.VE DURDU. FAAL.İLİŞKİN DURAN VARLIK BORÇLARI (Net)",  # held for sale liab.
-    "XV. DİĞER YÜKÜMLÜLÜKLER",                                             # other liabilities (paper: semi-liquid)
 )
 
 _ILLIQUID_LIABILITIES_EQUITY = (
     "IV. İHRAÇ EDİLEN MENKUL KIYMETLER (Net)",                             # securities issued
     "IX. KİRALAMA İŞLEMLERİNDEN YÜKÜMLÜLÜKLER (Net)",                      # liabilities from leases
+    "X. KARŞILIKLAR",                                                       # provisions (paper Table 2: illiquid)
+    "XI. CARİ VERGİ BORCU",                                                # taxes, duties (paper Table 2: illiquid)
     "XIV. SERMAYE BENZERİ BORÇLANMA ARAÇLARI",                              # subordinated debt
+    "XV. DİĞER YÜKÜMLÜLÜKLER",                                             # other liabilities (paper Table 2: illiquid)
     "XVI. ÖZKAYNAKLAR",                                                     # total shareholders' equity
 )
 
@@ -268,7 +268,7 @@ async def get_liquidity_creation(
     accounting_system: str | None = None,
 ) -> list[dict]:
     """Calculate LC ratio per bank for a given period."""
-    cache_key = f"liq:creation:v7:{year}:{month}:{accounting_system}"
+    cache_key = f"liq:creation:v8:{year}:{month}:{accounting_system}"
     cached = await cache_get(redis, cache_key)
     if cached:
         return cached
@@ -322,7 +322,7 @@ async def get_liquidity_time_series(
     accounting_system: str | None = None,
 ) -> list[dict]:
     """LC time series — sector weighted average or single bank."""
-    cache_key = f"liq:ts:v7:{bank_name}:{from_year}:{to_year}:{accounting_system}"
+    cache_key = f"liq:ts:v8:{bank_name}:{from_year}:{to_year}:{accounting_system}"
     cached = await cache_get(redis, cache_key)
     if cached:
         return cached
@@ -460,7 +460,7 @@ async def get_liquidity_by_group(
     accounting_system: str | None = None,
 ) -> list[dict]:
     """LC weighted average by bank ownership group."""
-    cache_key = f"liq:groups:v9:{year}:{month}:{accounting_system}"
+    cache_key = f"liq:groups:v10:{year}:{month}:{accounting_system}"
     cached = await cache_get(redis, cache_key)
     if cached:
         return cached
@@ -526,7 +526,7 @@ async def get_liquidity_decomposition(
     accounting_system: str | None = None,
 ) -> dict | None:
     """LC decomposition for a single bank."""
-    cache_key = f"liq:decomp:v7:{bank_name}:{year}:{month}:{accounting_system}"
+    cache_key = f"liq:decomp:v8:{bank_name}:{year}:{month}:{accounting_system}"
     cached = await cache_get(redis, cache_key)
     if cached:
         return cached
@@ -612,7 +612,7 @@ async def get_liquidity_group_time_series(
     accounting_system: str | None = None,
 ) -> list[dict]:
     """LC time series by bank ownership group (State Banks / Other Banks)."""
-    cache_key = f"liq:grpts:v12:{accounting_system}"
+    cache_key = f"liq:grpts:v13:{accounting_system}"
     cached = await cache_get(redis, cache_key)
     if cached:
         return cached
