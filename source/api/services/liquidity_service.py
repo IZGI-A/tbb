@@ -41,15 +41,32 @@ CACHE_TTL = 3600  # 1 hour
 #   TBB has only "2.1. Krediler" → treated as illiquid.
 # - Cash/CBRT: paper splits cash (liquid) vs CBRT receivables (semi-liquid);
 #   TBB has "1.1 Nakit ve Nakit Benzerleri" → treated as liquid.
+# - Pre-2018 (SOLO) data uses the old Turkish GAAP chart of accounts.
+#   Each tuple below includes both TFRS9 (2018+) and legacy (pre-2018) names.
+#   Main statements: "1. VARLIKLAR" (TFRS9) vs "1. AKTİF" (legacy),
+#                    "2. YÜKÜMLÜLÜKLER" (TFRS9) vs "2. PASİF" (legacy).
 
-# Assets: child_statement values under startsWith(main_statement, '1. VARLIKLAR')
+# Main statement prefix tuples for _build_sum_if
+_ASSET_STMTS = ("1. VARLIKLAR", "1. AKTİF")
+_LIABILITY_STMTS = ("2. YÜKÜMLÜLÜKLER", "2. PASİF")
+_OBS_STMTS = ("3. NAZIM HESAPLAR",)  # same in both eras
+
+# Assets: child_statement values
 _LIQUID_ASSETS = (
-    "1.1 Nakit ve Nakit Benzerleri",                                        # cash & equivalents (paper: Cash=liquid, CBRT=semi-liquid; combined)
+    # TFRS9 (2018+)
+    "1.1 Nakit ve Nakit Benzerleri",                                        # cash & equivalents
     "1.2 Gerçeğe Uygun Değer Farkı Kar Zarara Yansıtılan FV",             # securities at FV through P/L
-    "1.3 Gerçeğe Uygun Değer Farkı Diğer Kapsamlı Gelire Yansıtılan FV",  # securities available-for-sale (paper: liquid)
+    "1.3 Gerçeğe Uygun Değer Farkı Diğer Kapsamlı Gelire Yansıtılan FV",  # securities available-for-sale
+    # Legacy (pre-2018)
+    "NAKİT DEĞERLER VE MERKEZ BANKASI",                                    # cash & CBRT
+    "BANKALAR",                                                             # interbank deposits
+    "PARA PİYASALARINDAN ALACAKLAR",                                        # money market receivables / reverse repo
+    "GERÇEĞE UYGUN DEĞER FARKI K/Z`A YANSITILAN FİNANSAL VARLIKLAR(Net)",  # trading securities / FV through P/L
+    "SATILMAYA HAZIR FİNANSAL VARLIKLAR (Net)",                            # available-for-sale securities
 )
 
 _SEMI_LIQUID_ASSETS = (
+    # TFRS9 (2018+)
     "1.4 Türev Finansal Varlıklar",                                         # derivative assets
     "2.2 Kiralama İşlemlerinden Alacaklar",                                 # leasing receivables
     "2.3 Faktoring Alacakları",                                             # factoring receivables
@@ -58,51 +75,98 @@ _SEMI_LIQUID_ASSETS = (
     "IV. ORTAKLIK YATIRIMLARI",                                             # affiliates, subsidiaries
     "VIII. CARİ VERGİ VARLIĞI",                                            # current tax asset
     "IX. ERTELENMİŞ VERGİ VARLIĞI",                                        # deferred tax asset
+    # Legacy (pre-2018)
+    "RİSKTEN KORUNMA AMAÇLI TÜREV FİNANSAL VARLIKLAR",                    # hedging derivatives
+    "KİRALAMA İŞLEMLERİNDEN ALACAKLAR",                                    # leasing receivables
+    "FAKTORİNG ALACAKLARI",                                                 # factoring receivables
+    "VADEYE KADAR ELDE TUTULACAK YATIRIMLAR (Net)",                        # held-to-maturity investments
+    "SATIŞ AMAÇLI ELDE TUTULAN VE DURDURULAN FAALİYETLERE İLİŞKİN DURAN VARLIKLAR (Net)",
+    "İŞTİRAKLER (Net)",                                                    # associates
+    "BAĞLI ORTAKLIKLAR (Net)",                                              # subsidiaries
+    "BİRLİKTE KONTROL EDİLEN ORTAKLIKLAR (İŞ ORTAKLIKLARI) (Net)",        # joint ventures
+    "VERGİ VARLIĞI",                                                       # current + deferred tax asset
 )
 
 _ILLIQUID_ASSETS = (
-    "2.1. Krediler",                                                        # loans (paper: excl. mortgage=illiquid; combined)
+    # TFRS9 (2018+)
+    "2.1. Krediler",                                                        # loans
     "V. MADDİ DURAN VARLIKLAR(Net)",                                        # premises & equipment
     "VI. MADDİ OLMAYAN DURAN VARLIKLAR(Net)",                               # intangible assets
     "VII. YATIRIM AMAÇLI GAYRİMENKULLER (NET)",                            # investment property
     "X. DİĞER AKTİFLER (Net)",                                             # other assets
+    # Legacy (pre-2018)
+    "KREDİLER VE ALACAKLAR",                                               # loans & receivables
+    "MADDİ DURAN VARLIKLAR(Net)",                                           # tangible fixed assets
+    "MADDİ OLMAYAN DURAN VARLIKLAR(Net)",                                   # intangible assets
+    "YATIRIM AMAÇLI GAYRİMENKULLER (NET)",                                 # investment property (same name)
+    "DİĞER AKTİFLER",                                                      # other assets
 )
 
-# Liabilities: child_statement values under startsWith(main_statement, '2. YÜKÜMLÜLÜKLER')
+# Liabilities: child_statement values
 _LIQUID_LIABILITIES = (
-    "I. MEVDUAT",                                                           # deposits (paper: demand+term<=3mo; combined)
-    "II. ALINAN KREDİLER",                                                  # payables to banks (paper: liquid)
-    "III. PARA PİYASALARINA BORÇLAR",                                       # money market + repo (paper: liquid)
-    "V. FONLAR",                                                            # funds (paper: liquid)
-    "VI. GERÇEĞE UYGUN DEĞER FARKI KAR ZARARA YANSITILAN FİNANSAL YÜKÜMLÜLÜKLER",  # FV liabilities
+    # TFRS9 (2018+)
+    "I. MEVDUAT",                                                           # deposits
+    "II. ALINAN KREDİLER",                                                  # payables to banks
+    "III. PARA PİYASALARINA BORÇLAR",                                       # money market + repo
+    "V. FONLAR",                                                            # funds
+    "VI. GERÇEĞE UYGUN DEĞER FARKI KAR ZARARA YANSITILAN FİNANSAL YÜKÜMLÜLÜKLER",
+    # Legacy (pre-2018)
+    "MEVDUAT",                                                              # deposits
+    "ALINAN KREDİLER",                                                      # funds borrowed
+    "PARA PİYASALARINA BORÇLAR",                                            # money market liabilities
+    "FONLAR",                                                               # funds
+    "ALIM SATIM AMAÇLI TÜREV FİNANSAL BORÇLAR",                           # trading derivative liabilities
 )
 
 _SEMI_LIQUID_LIABILITIES = (
+    # TFRS9 (2018+)
     "VII. TÜREV FİNANSAL YÜKÜMLÜLÜKLER",                                   # derivative liabilities
     "VIII. FAKTORİNG YÜKÜMLÜLÜKLERİ",                                     # factoring liabilities
     "XII. ERTELENMİŞ VERGİ BORCU",                                         # deferred tax
-    "XIII. SATIŞ AMAÇLI ELDE TUTU.VE DURDU. FAAL.İLİŞKİN DURAN VARLIK BORÇLARI (Net)",  # held for sale liab.
+    "XIII. SATIŞ AMAÇLI ELDE TUTU.VE DURDU. FAAL.İLİŞKİN DURAN VARLIK BORÇLARI (Net)",
+    # Legacy (pre-2018)
+    "RİSKTEN KORUNMA AMAÇLI TÜREV FİNANSAL BORÇLAR",                      # hedging derivative liabilities
+    "FAKTORİNG BORÇLARI",                                                   # factoring liabilities
+    "VERGİ BORCU",                                                          # current + deferred tax (combined)
+    "SATIŞ AMAÇLI ELDE TUTULAN VE DURDURULAN FAALİYETLERE İLİŞKİN DURAN VARLIK BORÇLARI (Net)",
 )
 
 _ILLIQUID_LIABILITIES_EQUITY = (
+    # TFRS9 (2018+)
     "IV. İHRAÇ EDİLEN MENKUL KIYMETLER (Net)",                             # securities issued
     "IX. KİRALAMA İŞLEMLERİNDEN YÜKÜMLÜLÜKLER (Net)",                      # liabilities from leases
-    "X. KARŞILIKLAR",                                                       # provisions (paper Table 2: illiquid)
-    "XI. CARİ VERGİ BORCU",                                                # taxes, duties (paper Table 2: illiquid)
+    "X. KARŞILIKLAR",                                                       # provisions
+    "XI. CARİ VERGİ BORCU",                                                # current tax
     "XIV. SERMAYE BENZERİ BORÇLANMA ARAÇLARI",                              # subordinated debt
-    "XV. DİĞER YÜKÜMLÜLÜKLER",                                             # other liabilities (paper Table 2: illiquid)
-    "XVI. ÖZKAYNAKLAR",                                                     # total shareholders' equity
+    "XV. DİĞER YÜKÜMLÜLÜKLER",                                             # other liabilities
+    "XVI. ÖZKAYNAKLAR",                                                     # shareholders' equity
+    # Legacy (pre-2018)
+    "İHRAÇ EDİLEN MENKUL KIYMETLER (Net)",                                 # securities issued
+    "KİRALAMA İŞLEMLERİNDEN BORÇLAR",                                      # lease liabilities
+    "KARŞILIKLAR",                                                          # provisions
+    "SERMAYE BENZERİ KREDİLER",                                             # subordinated loans
+    "MUHTELİF BORÇLAR",                                                     # sundry liabilities
+    "DİĞER YABANCI KAYNAKLAR",                                             # other foreign resources
+    "ÖZKAYNAKLAR",                                                          # shareholders' equity
 )
 
-# Off-Balance Sheet: child_statement values under startsWith(main_statement, '3. NAZIM HESAPLAR')
+# Off-Balance Sheet: child_statement values under '3. NAZIM HESAPLAR'
 _ILLIQUID_OBS = (
+    # TFRS9 (2018+)
     "I. GARANTİ ve KEFALETLER",                                            # guarantees & sureties
     "2.1.Cayılamaz Taahhütler",                                             # irrevocable commitments
+    # Legacy (pre-2018)
+    "GARANTİ VE KEFALETLER",                                               # guarantees & sureties
+    "Cayılamaz Taahhütler",                                                 # irrevocable commitments
 )
 
 _SEMI_LIQUID_OBS = (
+    # TFRS9 (2018+)
     "III. TÜREV FİNANSAL ARAÇLAR",                                         # OBS derivatives
     "2.2.Cayılabilir Taahhütler",                                           # revocable commitments
+    # Legacy (pre-2018)
+    "TÜREV FİNANSAL ARAÇLAR",                                              # OBS derivatives
+    "Cayılabilir Taahhütler",                                               # revocable commitments
 )
 
 # Bank names to exclude: sector aggregates + development/investment banks
@@ -145,12 +209,34 @@ _EXCLUDED_BANKS = (
 )
 
 
-def _build_sum_if(items: tuple[str, ...], main_stmt: str, col: str = "amount_total") -> str:
-    """Build a sumIf expression for a list of child_statement values."""
+def _build_sum_if(
+    items: tuple[str, ...],
+    main_stmt: str | tuple[str, ...],
+    col: str = "amount_total",
+) -> str:
+    """Build a sumIf expression for a list of child_statement values.
+
+    *main_stmt* can be a single prefix string or a tuple of prefixes
+    (joined with OR) to support both TFRS9 and legacy main_statement names.
+    """
     escaped = ", ".join(f"'{s}'" for s in items)
+    if isinstance(main_stmt, str):
+        stmt_cond = f"startsWith(main_statement, '{main_stmt}')"
+    else:
+        parts = " OR ".join(f"startsWith(main_statement, '{s}')" for s in main_stmt)
+        stmt_cond = f"({parts})"
     return (
-        f"sumIf({col}, startsWith(main_statement, '{main_stmt}') "
+        f"sumIf({col}, {stmt_cond} "
         f"AND child_statement IN ({escaped}))"
+    )
+
+
+def _total_assets_expr(col: str = "amount_total") -> str:
+    """SQL expression for total assets — handles both TFRS9 and legacy."""
+    return (
+        f"sumIf({col}, "
+        f"(startsWith(main_statement, '1. VARLIKLAR') AND child_statement = 'XI. VARLIKLAR TOPLAMI') "
+        f"OR (main_statement = '1. AKTİF' AND child_statement = ''))"
     )
 
 
@@ -158,16 +244,15 @@ def _lc_select_columns() -> str:
     """Return the SELECT columns for LC calculation (on-balance + off-balance sheet)."""
     return f"""
         bank_name,
-        {_build_sum_if(_LIQUID_ASSETS, '1. VARLIKLAR')} AS liquid_assets,
-        {_build_sum_if(_SEMI_LIQUID_ASSETS, '1. VARLIKLAR')} AS semi_liquid_assets,
-        {_build_sum_if(_ILLIQUID_ASSETS, '1. VARLIKLAR')} AS illiquid_assets,
-        {_build_sum_if(_LIQUID_LIABILITIES, '2. YÜKÜMLÜLÜKLER')} AS liquid_liabilities,
-        {_build_sum_if(_SEMI_LIQUID_LIABILITIES, '2. YÜKÜMLÜLÜKLER')} AS semi_liquid_liabilities,
-        {_build_sum_if(_ILLIQUID_LIABILITIES_EQUITY, '2. YÜKÜMLÜLÜKLER')} AS illiquid_liabilities_equity,
-        {_build_sum_if(_ILLIQUID_OBS, '3. NAZIM HESAPLAR')} AS illiquid_obs,
-        {_build_sum_if(_SEMI_LIQUID_OBS, '3. NAZIM HESAPLAR')} AS semi_liquid_obs,
-        sumIf(amount_total, startsWith(main_statement, '1. VARLIKLAR')
-            AND child_statement = 'XI. VARLIKLAR TOPLAMI') AS total_assets
+        {_build_sum_if(_LIQUID_ASSETS, _ASSET_STMTS)} AS liquid_assets,
+        {_build_sum_if(_SEMI_LIQUID_ASSETS, _ASSET_STMTS)} AS semi_liquid_assets,
+        {_build_sum_if(_ILLIQUID_ASSETS, _ASSET_STMTS)} AS illiquid_assets,
+        {_build_sum_if(_LIQUID_LIABILITIES, _LIABILITY_STMTS)} AS liquid_liabilities,
+        {_build_sum_if(_SEMI_LIQUID_LIABILITIES, _LIABILITY_STMTS)} AS semi_liquid_liabilities,
+        {_build_sum_if(_ILLIQUID_LIABILITIES_EQUITY, _LIABILITY_STMTS)} AS illiquid_liabilities_equity,
+        {_build_sum_if(_ILLIQUID_OBS, _OBS_STMTS)} AS illiquid_obs,
+        {_build_sum_if(_SEMI_LIQUID_OBS, _OBS_STMTS)} AS semi_liquid_obs,
+        {_total_assets_expr()} AS total_assets
     """
 
 
@@ -268,7 +353,7 @@ async def get_liquidity_creation(
     accounting_system: str | None = None,
 ) -> list[dict]:
     """Calculate LC ratio per bank for a given period."""
-    cache_key = f"liq:creation:v8:{year}:{month}:{accounting_system}"
+    cache_key = f"liq:creation:v9:{year}:{month}:{accounting_system}"
     cached = await cache_get(redis, cache_key)
     if cached:
         return cached
@@ -322,7 +407,7 @@ async def get_liquidity_time_series(
     accounting_system: str | None = None,
 ) -> list[dict]:
     """LC time series — sector weighted average or single bank."""
-    cache_key = f"liq:ts:v8:{bank_name}:{from_year}:{to_year}:{accounting_system}"
+    cache_key = f"liq:ts:v9:{bank_name}:{from_year}:{to_year}:{accounting_system}"
     cached = await cache_get(redis, cache_key)
     if cached:
         return cached
@@ -349,16 +434,15 @@ async def get_liquidity_time_series(
         query = f"""
             SELECT
                 year_id, month_id,
-                {_build_sum_if(_LIQUID_ASSETS, '1. VARLIKLAR')} AS liquid_assets,
-                {_build_sum_if(_ILLIQUID_ASSETS, '1. VARLIKLAR')} AS illiquid_assets,
-                {_build_sum_if(_SEMI_LIQUID_ASSETS, '1. VARLIKLAR')} AS semi_liquid_assets,
-                {_build_sum_if(_LIQUID_LIABILITIES, '2. YÜKÜMLÜLÜKLER')} AS liquid_liabilities,
-                {_build_sum_if(_SEMI_LIQUID_LIABILITIES, '2. YÜKÜMLÜLÜKLER')} AS semi_liquid_liabilities,
-                {_build_sum_if(_ILLIQUID_LIABILITIES_EQUITY, '2. YÜKÜMLÜLÜKLER')} AS illiquid_liabilities_equity,
-                {_build_sum_if(_ILLIQUID_OBS, '3. NAZIM HESAPLAR')} AS illiquid_obs,
-                {_build_sum_if(_SEMI_LIQUID_OBS, '3. NAZIM HESAPLAR')} AS semi_liquid_obs,
-                sumIf(amount_total, startsWith(main_statement, '1. VARLIKLAR')
-                    AND child_statement = 'XI. VARLIKLAR TOPLAMI') AS total_assets
+                {_build_sum_if(_LIQUID_ASSETS, _ASSET_STMTS)} AS liquid_assets,
+                {_build_sum_if(_ILLIQUID_ASSETS, _ASSET_STMTS)} AS illiquid_assets,
+                {_build_sum_if(_SEMI_LIQUID_ASSETS, _ASSET_STMTS)} AS semi_liquid_assets,
+                {_build_sum_if(_LIQUID_LIABILITIES, _LIABILITY_STMTS)} AS liquid_liabilities,
+                {_build_sum_if(_SEMI_LIQUID_LIABILITIES, _LIABILITY_STMTS)} AS semi_liquid_liabilities,
+                {_build_sum_if(_ILLIQUID_LIABILITIES_EQUITY, _LIABILITY_STMTS)} AS illiquid_liabilities_equity,
+                {_build_sum_if(_ILLIQUID_OBS, _OBS_STMTS)} AS illiquid_obs,
+                {_build_sum_if(_SEMI_LIQUID_OBS, _OBS_STMTS)} AS semi_liquid_obs,
+                {_total_assets_expr()} AS total_assets
             FROM tbb.financial_statements FINAL
             WHERE {where}
             GROUP BY year_id, month_id
@@ -403,16 +487,15 @@ async def get_liquidity_time_series(
             FROM (
                 SELECT
                     bank_name, year_id, month_id,
-                    {_build_sum_if(_LIQUID_ASSETS, '1. VARLIKLAR')} AS la,
-                    {_build_sum_if(_ILLIQUID_ASSETS, '1. VARLIKLAR')} AS ia,
-                    {_build_sum_if(_SEMI_LIQUID_ASSETS, '1. VARLIKLAR')} AS sla,
-                    {_build_sum_if(_LIQUID_LIABILITIES, '2. YÜKÜMLÜLÜKLER')} AS ll,
-                    {_build_sum_if(_SEMI_LIQUID_LIABILITIES, '2. YÜKÜMLÜLÜKLER')} AS sll,
-                    {_build_sum_if(_ILLIQUID_LIABILITIES_EQUITY, '2. YÜKÜMLÜLÜKLER')} AS ile,
-                    {_build_sum_if(_ILLIQUID_OBS, '3. NAZIM HESAPLAR')} AS iobs,
-                    {_build_sum_if(_SEMI_LIQUID_OBS, '3. NAZIM HESAPLAR')} AS slobs,
-                    sumIf(amount_total, startsWith(main_statement, '1. VARLIKLAR')
-                        AND child_statement = 'XI. VARLIKLAR TOPLAMI') AS ta
+                    {_build_sum_if(_LIQUID_ASSETS, _ASSET_STMTS)} AS la,
+                    {_build_sum_if(_ILLIQUID_ASSETS, _ASSET_STMTS)} AS ia,
+                    {_build_sum_if(_SEMI_LIQUID_ASSETS, _ASSET_STMTS)} AS sla,
+                    {_build_sum_if(_LIQUID_LIABILITIES, _LIABILITY_STMTS)} AS ll,
+                    {_build_sum_if(_SEMI_LIQUID_LIABILITIES, _LIABILITY_STMTS)} AS sll,
+                    {_build_sum_if(_ILLIQUID_LIABILITIES_EQUITY, _LIABILITY_STMTS)} AS ile,
+                    {_build_sum_if(_ILLIQUID_OBS, _OBS_STMTS)} AS iobs,
+                    {_build_sum_if(_SEMI_LIQUID_OBS, _OBS_STMTS)} AS slobs,
+                    {_total_assets_expr()} AS ta
                 FROM tbb.financial_statements FINAL
                 WHERE {where}
                 GROUP BY bank_name, year_id, month_id
@@ -460,7 +543,7 @@ async def get_liquidity_by_group(
     accounting_system: str | None = None,
 ) -> list[dict]:
     """LC weighted average by bank ownership group."""
-    cache_key = f"liq:groups:v10:{year}:{month}:{accounting_system}"
+    cache_key = f"liq:groups:v11:{year}:{month}:{accounting_system}"
     cached = await cache_get(redis, cache_key)
     if cached:
         return cached
@@ -526,7 +609,7 @@ async def get_liquidity_decomposition(
     accounting_system: str | None = None,
 ) -> dict | None:
     """LC decomposition for a single bank."""
-    cache_key = f"liq:decomp:v8:{bank_name}:{year}:{month}:{accounting_system}"
+    cache_key = f"liq:decomp:v9:{bank_name}:{year}:{month}:{accounting_system}"
     cached = await cache_get(redis, cache_key)
     if cached:
         return cached
@@ -612,7 +695,7 @@ async def get_liquidity_group_time_series(
     accounting_system: str | None = None,
 ) -> list[dict]:
     """LC time series by bank ownership group (State Banks / Other Banks)."""
-    cache_key = f"liq:grpts:v13:{accounting_system}"
+    cache_key = f"liq:grpts:v14:{accounting_system}"
     cached = await cache_get(redis, cache_key)
     if cached:
         return cached
@@ -636,12 +719,11 @@ async def get_liquidity_group_time_series(
     query = f"""
         SELECT
             bank_name, year_id, month_id,
-            {_build_sum_if(_LIQUID_ASSETS, '1. VARLIKLAR')} AS la,
-            {_build_sum_if(_ILLIQUID_ASSETS, '1. VARLIKLAR')} AS ia,
-            {_build_sum_if(_LIQUID_LIABILITIES, '2. YÜKÜMLÜLÜKLER')} AS ll,
-            {_build_sum_if(_ILLIQUID_LIABILITIES_EQUITY, '2. YÜKÜMLÜLÜKLER')} AS ile,
-            sumIf(amount_total, startsWith(main_statement, '1. VARLIKLAR')
-                AND child_statement = 'XI. VARLIKLAR TOPLAMI') AS ta
+            {_build_sum_if(_LIQUID_ASSETS, _ASSET_STMTS)} AS la,
+            {_build_sum_if(_ILLIQUID_ASSETS, _ASSET_STMTS)} AS ia,
+            {_build_sum_if(_LIQUID_LIABILITIES, _LIABILITY_STMTS)} AS ll,
+            {_build_sum_if(_ILLIQUID_LIABILITIES_EQUITY, _LIABILITY_STMTS)} AS ile,
+            {_total_assets_expr()} AS ta
         FROM tbb.financial_statements FINAL
         WHERE {where}
         GROUP BY bank_name, year_id, month_id

@@ -48,6 +48,8 @@ KNOWN_SECTIONS = {
     "6. ÖZKAYNAK DEĞİŞİM TABLOSU-Önceki",
     "7. NAKİT AKIŞ TABLOSU",
     "8. KAR DAĞITIM TABLOSU", "9. DİPNOTLAR",
+    # Legacy (pre-2018) equivalents
+    "1. AKTİF", "2. PASİF",
 }
 KNOWN_DIPNOTS = {
     "1. MALİ BÜNYE İLE İLGİLİ DİPNOTLAR",
@@ -60,10 +62,29 @@ KNOWN_DIPNOTS = {
 _ALL_KNOWN = KNOWN_SECTIONS | KNOWN_DIPNOTS
 
 # The .btn-dx-select buttons appear in DOM order:
-# index 0 → SOLO, index 1 → CONSOLIDATED
+# index 0 → TFRS9-SOLO, index 1 → TFRS9-KONSOLIDE
+# Legacy (pre-2018) tables follow; run discover_table_types() to find exact indices.
 TABLE_TYPES = {
     "solo": {"index": 0, "label": "TFRS9-SOLO"},
     "consolidated": {"index": 1, "label": "TFRS9-KONSOLIDE"},
+    "solo_legacy": {"index": 2, "label": "SOLO"},
+    "consolidated_legacy": {"index": 3, "label": "KONSOLİDE"},
+}
+
+# Map table_key → ROOT_KEY in the TBB item hierarchy
+_ROOT_KEYS = {
+    "solo": 102080,
+    "consolidated": 352080,
+    "solo_legacy": 2080,
+    "consolidated_legacy": 42080,
+}
+
+# TBB API request headers (public, no auth required)
+_API_HEADERS = {
+    "Content-Type": "application/json",
+    "token": "asd",
+    "role": "1",
+    "LANG": "tr",
 }
 
 BANK_GROUP_ALL = 5  # Turkiye Bankacilik Sistemi
@@ -90,6 +111,43 @@ class FinancialScraper(TBBScraper):
         self.navigate(FINANCIAL_PAGE)
         time.sleep(5)
         self.dismiss_tour()
+
+    def discover_table_types(self) -> list[dict]:
+        """List all available table types on the financial page.
+
+        Returns list of {index, label} dicts corresponding to the
+        .btn-dx-select.all buttons in DOM order.  Run this to find
+        the correct index for legacy / pre-2018 tables.
+        """
+        self._navigate_to_page()
+        result = self.execute_js("""
+            var buttons = document.querySelectorAll('.btn-dx-select.all');
+            var out = [];
+            for (var i = 0; i < buttons.length; i++) {
+                // Walk up to find the closest treeview item text
+                var node = buttons[i];
+                var label = '';
+                // The button sits inside a treeview node; find sibling text
+                var parent = node.closest('.dx-treeview-node');
+                if (parent) {
+                    var textEl = parent.querySelector('.dx-treeview-item-content');
+                    if (textEl) label = textEl.textContent.trim();
+                }
+                if (!label) {
+                    // fallback: look at prev sibling or parent text
+                    var prev = node.previousElementSibling;
+                    if (prev) label = prev.textContent.trim();
+                }
+                out.push({index: i, label: label || '(unknown)'});
+            }
+            return JSON.stringify(out);
+        """)
+        if not result:
+            return []
+        try:
+            return __import__("json").loads(result) if isinstance(result, str) else result
+        except Exception:
+            return []
 
     def _select_table_type(self, table_key: str = "solo", select_all: bool = True):
         """Select a financial table type from the treeview."""
@@ -367,6 +425,19 @@ class FinancialScraper(TBBScraper):
         api_hierarchy = self._fetch_api_hierarchy()
 
         for table_key in table_keys:
+            # Legacy tables are NOT in the web UI treeview → use direct API
+            if table_key.endswith("_legacy"):
+                try:
+                    records = self._scrape_table_api(
+                        table_key,
+                        period_keys=period_keys,
+                        include_individual_banks=include_individual_banks,
+                        api_hierarchy=api_hierarchy,
+                    )
+                    all_records.extend(records)
+                except Exception as e:
+                    logger.error("API scrape failed for '%s': %s", table_key, e)
+                continue
             table_label = TABLE_TYPES.get(table_key, {}).get("label", table_key)
 
             # --- Phase 1: Aggregate (Türkiye Bankacılık Sistemi) ---
@@ -600,6 +671,227 @@ class FinancialScraper(TBBScraper):
 
         logger.info("Built API hierarchy paths for %d items", len(result))
         return result
+
+    # ------------------------------------------------------------------ #
+    #  Direct JSON API methods (no Selenium needed)
+    # ------------------------------------------------------------------ #
+
+    @staticmethod
+    def _api_request(payload: dict, timeout: int = 300) -> list | dict:
+        """POST to the TBB API router. Returns parsed JSON."""
+        resp = requests.post(
+            TBB_API_URL,
+            json=payload,
+            headers=_API_HEADERS,
+            verify=False,
+            timeout=timeout,
+        )
+        resp.raise_for_status()
+        return resp.json()
+
+    @staticmethod
+    def _fetch_periods_api() -> list[dict]:
+        """Fetch all available periods from the TBB API.
+
+        Returns list of dicts with KEY, YIL, AY, DONEM_ORDER.
+        """
+        return FinancialScraper._api_request({"route": "donemler"})
+
+    @staticmethod
+    def _fetch_banks_api() -> dict[int, str]:
+        """Fetch banks and return {BANKA_KODU: TR_ADI} mapping."""
+        data = FinancialScraper._api_request({
+            "route": "bankalar",
+            "donemler": [],
+            "maliTablolar": [],
+        })
+        return {b["BANKA_KODU"]: b["TR_ADI"] for b in data if b.get("BANKA_KODU")}
+
+    @staticmethod
+    def _fetch_bank_groups_api() -> dict[int, str]:
+        """Fetch bank groups and return {GRUP_NO: TR_ADI} mapping."""
+        data = FinancialScraper._api_request({
+            "route": "bankaGruplari",
+            "donemler": [],
+            "maliTablolar": [],
+        })
+        return {g["GRUP_NO"]: g["TR_ADI"] for g in data if g.get("GRUP_NO")}
+
+    @staticmethod
+    def _fetch_values_api(
+        donemler: list[int],
+        mali_tablolar: list[int],
+        bankalar: list[int] | None = None,
+        banka_gruplari: list[int] | None = None,
+    ) -> list[dict]:
+        """Fetch financial values via the ``degerler`` API route.
+
+        Returns list of dicts with TP_DEGER, YP_DEGER, TOPLAM,
+        BANKA_KODU, BANKA_GRUP, YIL, AY, UNIQUE_KEY, etc.
+        """
+        return FinancialScraper._api_request({
+            "route": "degerler",
+            "donemler": donemler,
+            "maliTablolar": mali_tablolar,
+            "bankalar": bankalar or [],
+            "bankaGruplari": banka_gruplari or [],
+        })
+
+    def _map_api_values(
+        self,
+        values: list[dict],
+        api_hierarchy: dict[int, dict],
+        bank_names: dict[int, str],
+        group_names: dict[int, str],
+        table_label: str,
+        year_id: int,
+        month_id: int,
+    ) -> list[dict[str, Any]]:
+        """Map raw ``degerler`` API values to transformer-compatible records."""
+        records: list[dict[str, Any]] = []
+        for v in values:
+            uk = v.get("UNIQUE_KEY")
+            if not uk:
+                continue
+
+            hier = api_hierarchy.get(uk, {})
+            full_path = hier.get("full_path", "")
+            item_name = hier.get("name", "")
+
+            parts = full_path.split(" > ")
+            if len(parts) > 1:
+                ana_kalem = " > ".join(parts[:-1])
+                alt_kalem = parts[-1]
+            else:
+                ana_kalem = full_path or item_name
+                alt_kalem = ""
+
+            # Determine bank/group name
+            is_group = v.get("BANKA_GRUP", False)
+            bank_code = v.get("BANKA_KODU")
+            if is_group:
+                banka = group_names.get(bank_code, f"Group {bank_code}")
+            else:
+                banka = bank_names.get(bank_code, f"Bank {bank_code}")
+
+            records.append({
+                "Ana Kalem": ana_kalem,
+                "Alt Kalem": alt_kalem,
+                "Banka": banka,
+                "Muhasebe Sistemi": table_label,
+                "_statement_text": table_label,
+                "_year_id": year_id,
+                "_month_id": month_id,
+                "TP": v.get("TP_DEGER", 0),
+                "YP": v.get("YP_DEGER", 0),
+                "Toplam": v.get("TOPLAM", 0),
+            })
+        return records
+
+    def _scrape_table_api(
+        self,
+        table_key: str,
+        period_keys: list[int] | None = None,
+        include_individual_banks: bool = True,
+        api_hierarchy: dict[int, dict] | None = None,
+    ) -> list[dict[str, Any]]:
+        """Scrape one table type via the direct TBB JSON API.
+
+        No Selenium needed.  Essential for legacy (pre-2018) data that
+        is not exposed in the web UI treeview.
+
+        Returns records compatible with *transform_financial*.
+        """
+        table_label = TABLE_TYPES.get(table_key, {}).get("label", table_key)
+        root_key = _ROOT_KEYS.get(table_key)
+        if not root_key:
+            logger.error("No ROOT_KEY mapping for table_key=%s", table_key)
+            return []
+
+        # 1. Fetch items and filter by ROOT_KEY
+        all_items = self._api_request({"route": "maliTablolarAll"})
+        table_items = [it for it in all_items if it.get("ROOT_KEY") == root_key]
+        item_uks = [it["UNIQUE_KEY"] for it in table_items]
+        logger.info(
+            "API scrape '%s' (root=%d): %d items", table_key, root_key, len(item_uks),
+        )
+        if not item_uks:
+            return []
+
+        # 2. Build hierarchy (reuse if provided)
+        if api_hierarchy is None:
+            api_hierarchy = self._fetch_api_hierarchy()
+
+        # 3. Resolve periods
+        all_periods = self._fetch_periods_api()
+        if period_keys:
+            plookup = {p["KEY"]: p for p in all_periods}
+            periods = [plookup[k] for k in period_keys if k in plookup]
+        else:
+            # Default: most recent period only
+            periods = sorted(
+                all_periods, key=lambda p: p.get("DONEM_ORDER", 0),
+            )[-1:]
+        logger.info("Will scrape %d periods via API", len(periods))
+
+        # 4. Fetch entity names
+        bank_names = self._fetch_banks_api()
+        group_names = self._fetch_bank_groups_api()
+
+        all_records: list[dict[str, Any]] = []
+
+        for period in periods:
+            pkey = period["KEY"]
+            yr, mo = period["YIL"], period["AY"]
+            logger.info(
+                "API scrape %s %d/%02d (key=%d)…", table_key, yr, mo, pkey,
+            )
+
+            # 4a. Individual banks
+            if include_individual_banks:
+                bank_codes = list(bank_names.keys())
+                try:
+                    vals = self._fetch_values_api(
+                        donemler=[pkey],
+                        mali_tablolar=item_uks,
+                        bankalar=bank_codes,
+                    )
+                    recs = self._map_api_values(
+                        vals, api_hierarchy, bank_names, group_names,
+                        table_label, yr, mo,
+                    )
+                    all_records.extend(recs)
+                    logger.info(
+                        "  individual banks: %d values → %d records",
+                        len(vals), len(recs),
+                    )
+                except Exception as e:
+                    logger.error("  individual banks failed: %s", e)
+
+            # 4b. Bank groups
+            group_ids = [BANK_GROUP_ALL] + BANK_GROUP_IDS
+            try:
+                gvals = self._fetch_values_api(
+                    donemler=[pkey],
+                    mali_tablolar=item_uks,
+                    banka_gruplari=group_ids,
+                )
+                grecs = self._map_api_values(
+                    gvals, api_hierarchy, bank_names, group_names,
+                    table_label, yr, mo,
+                )
+                all_records.extend(grecs)
+                logger.info(
+                    "  bank groups: %d values → %d records",
+                    len(gvals), len(grecs),
+                )
+            except Exception as e:
+                logger.error("  bank groups failed: %s", e)
+
+        logger.info(
+            "API scrape '%s' complete: %d total records", table_key, len(all_records),
+        )
+        return all_records
 
     @staticmethod
     def _build_hierarchy_path(

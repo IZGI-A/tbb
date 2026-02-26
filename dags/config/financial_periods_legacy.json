@@ -1,0 +1,4 @@
+{
+  "period_keys": [],
+  "_comment": "Pre-2018 (SOLO) donem ID'leri. Bos liste = sadece en son donem (site varsayilani). Gecerli key'leri ogrenmek icin: docker compose exec airflow-webserver python3 -m scripts.discover_tables --table-index 2"
+}

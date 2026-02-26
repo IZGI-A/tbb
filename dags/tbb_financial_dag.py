@@ -1,8 +1,9 @@
 """Airflow DAGs for TBB Financial Statements ETL pipeline.
 
-Two independent DAGs:
-  - tbb_financial_solo:         TFRS9-SOLO statements
-  - tbb_financial_consolidated: TFRS9-KONSOLIDE statements
+Three independent DAGs:
+  - tbb_financial_solo:         TFRS9-SOLO statements (2018+)
+  - tbb_financial_consolidated: TFRS9-KONSOLIDE statements (2018+)
+  - tbb_financial_solo_legacy:  SOLO statements (2002-2017, pre-TFRS9)
 
 Schedule: Weekly (Monday 06:00 UTC)
 Chain (each DAG): scrape → transform → load
@@ -32,7 +33,15 @@ from airflow.operators.python import PythonOperator
 logger = logging.getLogger(__name__)
 
 STAGING_DIR = "/tmp/tbb_staging/financial"
-PERIODS_CONFIG = os.path.join(os.path.dirname(__file__), "config", "financial_periods.json")
+CONFIG_DIR = os.path.join(os.path.dirname(__file__), "config")
+
+# Per-table-key config file mapping
+_PERIODS_CONFIG_MAP = {
+    "solo": "financial_periods.json",
+    "consolidated": "financial_periods.json",
+    "solo_legacy": "financial_periods_legacy.json",
+    "consolidated_legacy": "financial_periods_legacy.json",
+}
 
 default_args = {
     "owner": "tbb",
@@ -46,22 +55,24 @@ def _ensure_staging_dir():
     os.makedirs(STAGING_DIR, exist_ok=True)
 
 
-def _load_period_keys_from_config() -> list[int]:
-    """Read period_keys from dags/config/financial_periods.json."""
+def _load_period_keys_from_config(table_key: str = "solo") -> list[int]:
+    """Read period_keys from the config file for the given table_key."""
+    config_file = _PERIODS_CONFIG_MAP.get(table_key, "financial_periods.json")
+    config_path = os.path.join(CONFIG_DIR, config_file)
     try:
-        with open(PERIODS_CONFIG, encoding="utf-8") as f:
+        with open(config_path, encoding="utf-8") as f:
             data = json.load(f)
         return data.get("period_keys", [])
     except (FileNotFoundError, json.JSONDecodeError):
         return []
 
 
-def _resolve_period_keys(context) -> list[int] | None:
+def _resolve_period_keys(context, table_key: str = "solo") -> list[int] | None:
     """Determine which period keys to use.
 
     Priority:
       1. --conf '{"period_keys": [...]}' (highest)
-      2. dags/config/financial_periods.json
+      2. Config file for the table_key
       3. Empty → None (site default = most recent period)
     """
     # 1. From --conf (DAG params)
@@ -71,9 +82,9 @@ def _resolve_period_keys(context) -> list[int] | None:
         return keys
 
     # 2. From config file
-    keys = _load_period_keys_from_config()
+    keys = _load_period_keys_from_config(table_key)
     if keys:
-        logger.info("Period keys from config file: %s", keys)
+        logger.info("Period keys from config file (%s): %s", table_key, keys)
         return keys
 
     # 3. Default
@@ -86,7 +97,7 @@ def _scrape_table(table_key: str, **context):
 
     _ensure_staging_dir()
 
-    period_keys = _resolve_period_keys(context)
+    period_keys = _resolve_period_keys(context, table_key=table_key)
 
     with FinancialScraper() as scraper:
         raw_data = scraper.scrape_all(
@@ -238,6 +249,15 @@ def transform_consolidated(**ctx):
 def load_consolidated(**ctx):
     _load_table("consolidated", **ctx)
 
+def scrape_solo_legacy(**ctx):
+    _scrape_table("solo_legacy", **ctx)
+
+def transform_solo_legacy(**ctx):
+    _transform_table("solo_legacy", **ctx)
+
+def load_solo_legacy(**ctx):
+    _load_table("solo_legacy", **ctx)
+
 
 # ── DAG 1: Solo ─────────────────────────────────────────────────
 
@@ -295,3 +315,32 @@ with DAG(
     )
 
     t_scrape_cons >> t_transform_cons >> t_load_cons
+
+
+# ── DAG 3: Solo Legacy (pre-2018) ─────────────────────────────
+
+with DAG(
+    dag_id="tbb_financial_solo_legacy",
+    default_args=default_args,
+    description="TBB Financial Statements ETL Pipeline (Solo Legacy 2002-2017)",
+    schedule_interval=None,  # manual trigger only (historical data)
+    start_date=datetime(2024, 1, 1),
+    catchup=False,
+    tags=["tbb", "financial", "solo", "legacy"],
+    params=dag_params,
+) as dag_solo_legacy:
+
+    t_scrape_legacy = PythonOperator(
+        task_id="scrape_solo_legacy",
+        python_callable=scrape_solo_legacy,
+    )
+    t_transform_legacy = PythonOperator(
+        task_id="transform_solo_legacy",
+        python_callable=transform_solo_legacy,
+    )
+    t_load_legacy = PythonOperator(
+        task_id="load_solo_legacy",
+        python_callable=load_solo_legacy,
+    )
+
+    t_scrape_legacy >> t_transform_legacy >> t_load_legacy
