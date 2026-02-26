@@ -176,55 +176,87 @@ const LiquidityAnalysis: React.FC = () => {
         </Row>
       )}
 
-      {/* 1. LC by Bank Group — time series (Figure 2 from Çolak et al. 2024) */}
-      <Card title="Banka Grubuna Gore Likidite Yaratma Trendi" style={{ marginBottom: 16 }}>
-        <LineChart
-          title=""
-          xData={(() => {
-            const periods = Array.from(
-              new Set((groupTs ?? []).map((p: LiquidityGroupTimeSeries) =>
-                `${p.year_id}/${String(p.month_id).padStart(2, '0')}`
-              ))
-            ).sort();
-            return periods;
-          })()}
-          series={(() => {
-            const groups = Array.from(new Set((groupTs ?? []).map((p: LiquidityGroupTimeSeries) => p.group_name))).sort();
-            const periods = Array.from(
-              new Set((groupTs ?? []).map((p: LiquidityGroupTimeSeries) =>
-                `${p.year_id}/${String(p.month_id).padStart(2, '0')}`
-              ))
-            ).sort();
-            const lookup = new Map<string, number>();
-            (groupTs ?? []).forEach((p: LiquidityGroupTimeSeries) => {
-              lookup.set(`${p.group_name}|${p.year_id}/${String(p.month_id).padStart(2, '0')}`, p.lc_nonfat);
-            });
-            return groups.map(g => ({
-              name: g,
-              data: periods.map(pd => {
-                const val = lookup.get(`${g}|${pd}`);
-                return val !== undefined ? Number((val * 100).toFixed(2)) : null;
-              }),
-            }));
-          })()}
-          loading={groupTsLoading}
-        />
-      </Card>
+      {/* Chart + Cards side by side */}
+      <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
+        {/* Left: LC by Bank Group — time series (Figure 2 from Çolak et al. 2024) */}
+        <Col xs={24} lg={12}>
+          <Card title="Banka Grubuna Gore Likidite Yaratma Trendi" style={{ height: '100%' }}>
+            <LineChart
+              title=""
+              xData={(() => {
+                const periods = Array.from(
+                  new Set((groupTs ?? []).map((p: LiquidityGroupTimeSeries) =>
+                    `${p.year_id}/${String(p.month_id).padStart(2, '0')}`
+                  ))
+                ).sort();
+                return periods;
+              })()}
+              series={(() => {
+                const groups = Array.from(new Set((groupTs ?? []).map((p: LiquidityGroupTimeSeries) => p.group_name))).sort();
+                const periods = Array.from(
+                  new Set((groupTs ?? []).map((p: LiquidityGroupTimeSeries) =>
+                    `${p.year_id}/${String(p.month_id).padStart(2, '0')}`
+                  ))
+                ).sort();
+                const lookup = new Map<string, number>();
+                (groupTs ?? []).forEach((p: LiquidityGroupTimeSeries) => {
+                  lookup.set(`${p.group_name}|${p.year_id}/${String(p.month_id).padStart(2, '0')}`, p.lc_nonfat);
+                });
+                return groups.map(g => ({
+                  name: g,
+                  data: periods.map(pd => {
+                    const val = lookup.get(`${g}|${pd}`);
+                    return val !== undefined ? Number((val * 100).toFixed(2)) : null;
+                  }),
+                }));
+              })()}
+              loading={groupTsLoading}
+            />
+          </Card>
+        </Col>
 
-      {/* Bank Ranking Table */}
-      {year && month && (
-        <Card title="Banka Bazinda Likidite Yaratma" style={{ marginBottom: 16 }}>
-          <Table
-            columns={columns}
-            dataSource={creation ?? []}
-            loading={creationLoading}
-            rowKey="bank_name"
-            pagination={{ pageSize: 15 }}
-            scroll={{ x: 1100 }}
-            size="small"
-          />
-        </Card>
-      )}
+        {/* Right: Summary cards + Bank table */}
+        <Col xs={24} lg={12}>
+          {year && month && (
+            <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
+              <Col xs={12} md={8}>
+                <Card><Statistic title="Sektor Ort. LC" value={sectorAvg !== null ? (sectorAvg * 100).toFixed(2) : '-'} suffix="%" /></Card>
+              </Col>
+              <Col xs={12} md={8}>
+                <Card>
+                  <Statistic
+                    title={<Tooltip title="Sektor toplam likidite yaratimi: tum bankalarin LC tutarlarinin toplami (bin TL)">Toplam LC <InfoCircleOutlined style={{ fontSize: 12, color: '#999' }} /></Tooltip>}
+                    value={sectorTotalLC !== null ? (sectorTotalLC / 1e6).toLocaleString('tr-TR', { maximumFractionDigits: 0 }) : '-'}
+                    suffix="M"
+                  />
+                </Card>
+              </Col>
+              <Col xs={12} md={8}>
+                <Card><Statistic title="Banka Sayisi" value={creation?.length ?? 0} /></Card>
+              </Col>
+              <Col xs={12} md={8}>
+                <Card><Statistic title="En Yuksek LC" value={creation && creation.length > 0 ? (Math.max(...creation.map(c => c.lc_nonfat)) * 100).toFixed(2) : '-'} suffix="%" /></Card>
+              </Col>
+              <Col xs={12} md={8}>
+                <Card><Statistic title="En Dusuk LC" value={creation && creation.length > 0 ? (Math.min(...creation.map(c => c.lc_nonfat)) * 100).toFixed(2) : '-'} suffix="%" /></Card>
+              </Col>
+            </Row>
+          )}
+          {year && month && (
+            <Card title="Banka Bazinda Likidite Yaratma">
+              <Table
+                columns={columns}
+                dataSource={creation ?? []}
+                loading={creationLoading}
+                rowKey="bank_name"
+                pagination={{ pageSize: 10 }}
+                scroll={{ x: 700 }}
+                size="small"
+              />
+            </Card>
+          )}
+        </Col>
+      </Row>
 
     </div>
   );
