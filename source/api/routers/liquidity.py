@@ -76,6 +76,21 @@ async def liquidity_group_time_series(
         ch.disconnect()
 
 
+@router.get("/group-time-series-article")
+async def liquidity_group_time_series_article(
+    accounting_system: str | None = Query(None),
+    redis=Depends(get_redis_client),
+):
+    ch = get_ch()
+    try:
+        return await liquidity_service.get_liquidity_group_time_series_article(
+            ch, redis,
+            accounting_system=accounting_system,
+        )
+    finally:
+        ch.disconnect()
+
+
 @router.get("/decomposition")
 async def liquidity_decomposition(
     bank_name: str = Query(...),

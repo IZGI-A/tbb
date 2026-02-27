@@ -7,6 +7,7 @@ import { useFinancialPeriods } from '../hooks/useFinancial';
 import {
   useLiquidityCreation,
   useLiquidityGroupTimeSeries,
+  useLiquidityGroupTimeSeriesArticle,
 } from '../hooks/useLiquidity';
 import type { PeriodInfo, LiquidityCreation, LiquidityGroupTimeSeries } from '../types';
 
@@ -33,6 +34,9 @@ const LiquidityAnalysis: React.FC = () => {
     year, month, accountingSystem,
   );
   const { data: groupTs, isLoading: groupTsLoading } = useLiquidityGroupTimeSeries(
+    accountingSystem,
+  );
+  const { data: groupTsArticle, isLoading: groupTsArticleLoading } = useLiquidityGroupTimeSeriesArticle(
     accountingSystem,
   );
 
@@ -143,10 +147,10 @@ const LiquidityAnalysis: React.FC = () => {
         </Row>
       )}
 
-      {/* Chart — full width */}
+      {/* Charts — side by side */}
       <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
-        <Col xs={24}>
-          <Card title="Banka Grubuna Gore Likidite Yaratma Trendi">
+        <Col xs={24} lg={12}>
+          <Card title="Banka Grubuna Gore Likidite Yaratma Trendi" style={{ height: '100%' }}>
             <LineChart
               title=""
               xData={(() => {
@@ -177,6 +181,41 @@ const LiquidityAnalysis: React.FC = () => {
                 }));
               })()}
               loading={groupTsLoading}
+            />
+          </Card>
+        </Col>
+        <Col xs={24} lg={12}>
+          <Card title="Banka Grubuna Gore Likidite Yaratma Trendi (Article)" style={{ height: '100%' }}>
+            <LineChart
+              title=""
+              xData={(() => {
+                const periods = Array.from(
+                  new Set((groupTsArticle ?? []).map((p: LiquidityGroupTimeSeries) =>
+                    `${p.year_id}/${String(p.month_id).padStart(2, '0')}`
+                  ))
+                ).sort();
+                return periods;
+              })()}
+              series={(() => {
+                const groups = Array.from(new Set((groupTsArticle ?? []).map((p: LiquidityGroupTimeSeries) => p.group_name))).sort();
+                const periods = Array.from(
+                  new Set((groupTsArticle ?? []).map((p: LiquidityGroupTimeSeries) =>
+                    `${p.year_id}/${String(p.month_id).padStart(2, '0')}`
+                  ))
+                ).sort();
+                const lookup = new Map<string, number>();
+                (groupTsArticle ?? []).forEach((p: LiquidityGroupTimeSeries) => {
+                  lookup.set(`${p.group_name}|${p.year_id}/${String(p.month_id).padStart(2, '0')}`, p.lc_nonfat);
+                });
+                return groups.map(g => ({
+                  name: g,
+                  data: periods.map(pd => {
+                    const val = lookup.get(`${g}|${pd}`);
+                    return val !== undefined ? Number((val * 100).toFixed(2)) : null;
+                  }),
+                }));
+              })()}
+              loading={groupTsArticleLoading}
             />
           </Card>
         </Col>

@@ -88,6 +88,8 @@ export const liquidityApi = {
     apiClient.get('/liquidity/decomposition', { params }),
   getGroupTimeSeries: (params: { accounting_system?: string }) =>
     apiClient.get('/liquidity/group-time-series', { params }),
+  getGroupTimeSeriesArticle: (params: { accounting_system?: string }) =>
+    apiClient.get('/liquidity/group-time-series-article', { params }),
 };
 
 // Risk Analysis

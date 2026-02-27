@@ -46,6 +46,15 @@ export function useLiquidityGroupTimeSeries(accountingSystem?: string) {
   });
 }
 
+export function useLiquidityGroupTimeSeriesArticle(accountingSystem?: string) {
+  return useQuery<LiquidityGroupTimeSeries[]>({
+    queryKey: ['liquidity', 'group-time-series-article', accountingSystem],
+    queryFn: () => liquidityApi.getGroupTimeSeriesArticle({
+      accounting_system: accountingSystem,
+    }).then(r => r.data),
+  });
+}
+
 export function useLiquidityDecomposition(
   bankName?: string,
   year?: number,

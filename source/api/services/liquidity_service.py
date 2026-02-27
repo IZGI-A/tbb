@@ -791,3 +791,109 @@ async def get_liquidity_group_time_series(
 
     await cache_set(redis, cache_key, data, CACHE_TTL, default=str)
     return data
+
+
+# ---------------------------------------------------------------------------
+# Article sample — exact 22 banks from Çolak et al. (2024)
+# ---------------------------------------------------------------------------
+_ARTICLE_STATE_BANKS = {
+    "Türkiye Cumhuriyeti Ziraat Bankası A.Ş.",
+    "Türkiye Halk Bankası A.Ş.",
+    "Türkiye Vakıflar Bankası T.A.O.",
+}
+
+_ARTICLE_OTHER_BANKS = {
+    "Türk Ekonomi Bankası A.Ş.",
+    "Akbank T.A.Ş.",
+    "Şekerbank T.A.Ş.",
+    "Türkiye Garanti Bankası A.Ş.",
+    "Türkiye İş Bankası A.Ş.",
+    "Yapı ve Kredi Bankası A.Ş.",
+    "Arap Türk Bankası A.Ş.",
+    "Citibank A.Ş.",
+    "Bank Mellat",
+    "Turkish Bank A.Ş.",
+    "ING Bank A.Ş.",
+    "Turkland Bank A.Ş.",
+    "ICBC Turkey Bank A.Ş.",
+    "QNB Bank A.Ş.",
+    "HSBC Bank A.Ş.",
+    "Alternatifbank A.Ş.",
+    "Burgan Bank A.Ş.",
+    "Denizbank A.Ş.",
+    "Anadolubank A.Ş.",
+}
+
+
+async def get_liquidity_group_time_series_article(
+    ch: Client,
+    redis: aioredis.Redis,
+    accounting_system: str | None = None,
+) -> list[dict]:
+    """LC time series using the exact 22 banks from the article."""
+    cache_key = f"liq:grpts_article:v1:{accounting_system}"
+    cached = await cache_get(redis, cache_key)
+    if cached:
+        return cached
+
+    all_article_banks = _ARTICLE_STATE_BANKS | _ARTICLE_OTHER_BANKS
+    bank_to_group: dict[str, str] = {}
+    for b in _ARTICLE_STATE_BANKS:
+        bank_to_group[b] = "State Banks"
+    for b in _ARTICLE_OTHER_BANKS:
+        bank_to_group[b] = "Other Banks"
+
+    escaped_banks = ", ".join(f"'{b}'" for b in all_article_banks)
+
+    konsol_only = _get_konsol_only_banks(ch) if not accounting_system else None
+    acct_cond = _acct_filter(accounting_system, escape=False, konsol_only_banks=konsol_only).removeprefix("AND ")
+    conditions = [f"bank_name IN ({escaped_banks})", acct_cond]
+    where = " AND ".join(conditions)
+
+    query = f"""
+        SELECT
+            bank_name, year_id, month_id,
+            {_build_sum_if(_LIQUID_ASSETS, _ASSET_STMTS)} AS la,
+            {_build_sum_if(_ILLIQUID_ASSETS, _ASSET_STMTS)} AS ia,
+            {_build_sum_if(_LIQUID_LIABILITIES, _LIABILITY_STMTS)} AS ll,
+            {_build_sum_if(_ILLIQUID_LIABILITIES_EQUITY, _LIABILITY_STMTS)} AS ile,
+            {_total_assets_expr()} AS ta
+        FROM tbb.financial_statements FINAL
+        WHERE {where}
+        GROUP BY bank_name, year_id, month_id
+        HAVING ta > 0
+          AND abs(la) <= ta * 10 AND abs(ia) <= ta * 10
+          AND abs(ll) <= ta * 10 AND abs(ile) <= ta * 10
+        ORDER BY year_id, month_id
+    """
+    rows = ch.execute(query)
+
+    agg: dict[tuple[str, int, int], dict] = {}
+    for r in rows:
+        bname = r[0]
+        group = bank_to_group.get(bname)
+        if not group:
+            continue
+        year_id, month_id = r[1], r[2]
+        la, ia, ll, ile, ta = [_to_float(v) for v in r[3:]]
+        key = (group, year_id, month_id)
+        if key not in agg:
+            agg[key] = {"nonfat_num": 0.0, "ta_sum": 0.0}
+        nonfat_num = 0.5 * (ia + ll) - 0.5 * (la + ile)
+        agg[key]["nonfat_num"] += nonfat_num
+        agg[key]["ta_sum"] += ta
+
+    data = []
+    for (group, year_id, month_id), g in sorted(
+        agg.items(), key=lambda x: (x[0][1], x[0][2], x[0][0])
+    ):
+        if g["ta_sum"] > 0:
+            data.append({
+                "group_name": group,
+                "year_id": year_id,
+                "month_id": month_id,
+                "lc_nonfat": round(g["nonfat_num"] / g["ta_sum"], 4),
+            })
+
+    await cache_set(redis, cache_key, data, CACHE_TTL, default=str)
+    return data
