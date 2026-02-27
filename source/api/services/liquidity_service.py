@@ -57,48 +57,48 @@ _LIQUID_ASSETS = (
     "1.1 Nakit ve Nakit Benzerleri",                                        # cash & equivalents
     "1.2 Gerçeğe Uygun Değer Farkı Kar Zarara Yansıtılan FV",             # securities at FV through P/L
     "1.3 Gerçeğe Uygun Değer Farkı Diğer Kapsamlı Gelire Yansıtılan FV",  # securities available-for-sale
+    "2.2 Kiralama İşlemlerinden Alacaklar",                                 # leasing receivables (paper: liquid)
+    "III.SATIŞ AMAÇ.ELDE TUTU.VE DURD.FAAL.İLİŞKİN DURAN VARL.(Net)",    # held-for-sale assets (paper: liquid)
+    "IV. ORTAKLIK YATIRIMLARI",                                             # affiliates, subsidiaries (paper: liquid)
     # Legacy (pre-2018)
     "NAKİT DEĞERLER VE MERKEZ BANKASI",                                    # cash & CBRT
     "BANKALAR",                                                             # interbank deposits
     "PARA PİYASALARINDAN ALACAKLAR",                                        # money market receivables / reverse repo
     "GERÇEĞE UYGUN DEĞER FARKI K/Z`A YANSITILAN FİNANSAL VARLIKLAR(Net)",  # trading securities / FV through P/L
     "SATILMAYA HAZIR FİNANSAL VARLIKLAR (Net)",                            # available-for-sale securities
+    "KİRALAMA İŞLEMLERİNDEN ALACAKLAR",                                    # leasing receivables (paper: liquid)
+    "SATIŞ AMAÇLI ELDE TUTULAN VE DURDURULAN FAALİYETLERE İLİŞKİN DURAN VARLIKLAR (Net)",  # held-for-sale (paper: liquid)
+    "İŞTİRAKLER (Net)",                                                    # associates (paper: liquid)
+    "BAĞLI ORTAKLIKLAR (Net)",                                              # subsidiaries (paper: liquid)
+    "BİRLİKTE KONTROL EDİLEN ORTAKLIKLAR (İŞ ORTAKLIKLARI) (Net)",        # joint ventures (paper: liquid)
 )
 
 _SEMI_LIQUID_ASSETS = (
     # TFRS9 (2018+)
     "1.4 Türev Finansal Varlıklar",                                         # derivative assets
-    "2.2 Kiralama İşlemlerinden Alacaklar",                                 # leasing receivables
     "2.3 Faktoring Alacakları",                                             # factoring receivables
-    "2.4 İtfa Edilmiş Maliyeti ile Ölçülen Diğer Finansal Varlıklar",      # securities held to maturity
-    "III.SATIŞ AMAÇ.ELDE TUTU.VE DURD.FAAL.İLİŞKİN DURAN VARL.(Net)",    # assets to be sold
-    "IV. ORTAKLIK YATIRIMLARI",                                             # affiliates, subsidiaries
     "VIII. CARİ VERGİ VARLIĞI",                                            # current tax asset
     "IX. ERTELENMİŞ VERGİ VARLIĞI",                                        # deferred tax asset
     # Legacy (pre-2018)
     "RİSKTEN KORUNMA AMAÇLI TÜREV FİNANSAL VARLIKLAR",                    # hedging derivatives
-    "KİRALAMA İŞLEMLERİNDEN ALACAKLAR",                                    # leasing receivables
     "FAKTORİNG ALACAKLARI",                                                 # factoring receivables
-    "VADEYE KADAR ELDE TUTULACAK YATIRIMLAR (Net)",                        # held-to-maturity investments
-    "SATIŞ AMAÇLI ELDE TUTULAN VE DURDURULAN FAALİYETLERE İLİŞKİN DURAN VARLIKLAR (Net)",
-    "İŞTİRAKLER (Net)",                                                    # associates
-    "BAĞLI ORTAKLIKLAR (Net)",                                              # subsidiaries
-    "BİRLİKTE KONTROL EDİLEN ORTAKLIKLAR (İŞ ORTAKLIKLARI) (Net)",        # joint ventures
     "VERGİ VARLIĞI",                                                       # current + deferred tax asset
 )
 
 _ILLIQUID_ASSETS = (
     # TFRS9 (2018+)
     "2.1. Krediler",                                                        # loans
+    "2.4 İtfa Edilmiş Maliyeti ile Ölçülen Diğer Finansal Varlıklar",      # held-to-maturity securities (paper: illiquid)
     "V. MADDİ DURAN VARLIKLAR(Net)",                                        # premises & equipment
     "VI. MADDİ OLMAYAN DURAN VARLIKLAR(Net)",                               # intangible assets
     "VII. YATIRIM AMAÇLI GAYRİMENKULLER (NET)",                            # investment property
     "X. DİĞER AKTİFLER (Net)",                                             # other assets
     # Legacy (pre-2018)
     "KREDİLER VE ALACAKLAR",                                               # loans & receivables
+    "VADEYE KADAR ELDE TUTULACAK YATIRIMLAR (Net)",                        # held-to-maturity (paper: illiquid)
     "MADDİ DURAN VARLIKLAR(Net)",                                           # tangible fixed assets
     "MADDİ OLMAYAN DURAN VARLIKLAR(Net)",                                   # intangible assets
-    "YATIRIM AMAÇLI GAYRİMENKULLER (NET)",                                 # investment property (same name)
+    "YATIRIM AMAÇLI GAYRİMENKULLER (NET)",                                 # investment property
     "DİĞER AKTİFLER",                                                      # other assets
 )
 
@@ -122,12 +122,10 @@ _SEMI_LIQUID_LIABILITIES = (
     # TFRS9 (2018+)
     "VII. TÜREV FİNANSAL YÜKÜMLÜLÜKLER",                                   # derivative liabilities
     "VIII. FAKTORİNG YÜKÜMLÜLÜKLERİ",                                     # factoring liabilities
-    "XII. ERTELENMİŞ VERGİ BORCU",                                         # deferred tax
     "XIII. SATIŞ AMAÇLI ELDE TUTU.VE DURDU. FAAL.İLİŞKİN DURAN VARLIK BORÇLARI (Net)",
     # Legacy (pre-2018)
     "RİSKTEN KORUNMA AMAÇLI TÜREV FİNANSAL BORÇLAR",                      # hedging derivative liabilities
     "FAKTORİNG BORÇLARI",                                                   # factoring liabilities
-    "VERGİ BORCU",                                                          # current + deferred tax (combined)
     "SATIŞ AMAÇLI ELDE TUTULAN VE DURDURULAN FAALİYETLERE İLİŞKİN DURAN VARLIK BORÇLARI (Net)",
 )
 
@@ -137,6 +135,7 @@ _ILLIQUID_LIABILITIES_EQUITY = (
     "IX. KİRALAMA İŞLEMLERİNDEN YÜKÜMLÜLÜKLER (Net)",                      # liabilities from leases
     "X. KARŞILIKLAR",                                                       # provisions
     "XI. CARİ VERGİ BORCU",                                                # current tax
+    "XII. ERTELENMİŞ VERGİ BORCU",                                         # deferred tax (paper: illiquid)
     "XIV. SERMAYE BENZERİ BORÇLANMA ARAÇLARI",                              # subordinated debt
     "XV. DİĞER YÜKÜMLÜLÜKLER",                                             # other liabilities
     "XVI. ÖZKAYNAKLAR",                                                     # shareholders' equity
@@ -144,6 +143,7 @@ _ILLIQUID_LIABILITIES_EQUITY = (
     "İHRAÇ EDİLEN MENKUL KIYMETLER (Net)",                                 # securities issued
     "KİRALAMA İŞLEMLERİNDEN BORÇLAR",                                      # lease liabilities
     "KARŞILIKLAR",                                                          # provisions
+    "VERGİ BORCU",                                                          # current + deferred tax (paper: illiquid)
     "SERMAYE BENZERİ KREDİLER",                                             # subordinated loans
     "MUHTELİF BORÇLAR",                                                     # sundry liabilities
     "DİĞER YABANCI KAYNAKLAR",                                             # other foreign resources
@@ -151,6 +151,16 @@ _ILLIQUID_LIABILITIES_EQUITY = (
 )
 
 # Off-Balance Sheet: child_statement values under '3. NAZIM HESAPLAR'
+# Paper puts OBS derivatives under "Liquid Liabilities" (weight +½),
+# guarantees & irrevocable commitments under "Illiquid" (weight -½),
+# and revocable commitments as semi-liquid (weight 0).
+_LIQUID_OBS = (
+    # TFRS9 (2018+)
+    "III. TÜREV FİNANSAL ARAÇLAR",                                         # OBS derivatives (paper: liquid)
+    # Legacy (pre-2018)
+    "TÜREV FİNANSAL ARAÇLAR",                                              # OBS derivatives (paper: liquid)
+)
+
 _ILLIQUID_OBS = (
     # TFRS9 (2018+)
     "I. GARANTİ ve KEFALETLER",                                            # guarantees & sureties
@@ -162,10 +172,8 @@ _ILLIQUID_OBS = (
 
 _SEMI_LIQUID_OBS = (
     # TFRS9 (2018+)
-    "III. TÜREV FİNANSAL ARAÇLAR",                                         # OBS derivatives
     "2.2.Cayılabilir Taahhütler",                                           # revocable commitments
     # Legacy (pre-2018)
-    "TÜREV FİNANSAL ARAÇLAR",                                              # OBS derivatives
     "Cayılabilir Taahhütler",                                               # revocable commitments
 )
 
@@ -250,6 +258,7 @@ def _lc_select_columns() -> str:
         {_build_sum_if(_LIQUID_LIABILITIES, _LIABILITY_STMTS)} AS liquid_liabilities,
         {_build_sum_if(_SEMI_LIQUID_LIABILITIES, _LIABILITY_STMTS)} AS semi_liquid_liabilities,
         {_build_sum_if(_ILLIQUID_LIABILITIES_EQUITY, _LIABILITY_STMTS)} AS illiquid_liabilities_equity,
+        {_build_sum_if(_LIQUID_OBS, _OBS_STMTS)} AS liquid_obs,
         {_build_sum_if(_ILLIQUID_OBS, _OBS_STMTS)} AS illiquid_obs,
         {_build_sum_if(_SEMI_LIQUID_OBS, _OBS_STMTS)} AS semi_liquid_obs,
         {_total_assets_expr()} AS total_assets
@@ -270,13 +279,20 @@ def _compute_lc_nonfat(row: dict) -> float | None:
 
 
 def _compute_lc_fat(row: dict) -> float | None:
-    """Compute cat fat LC ratio (includes off-balance sheet items)."""
+    """Compute cat fat LC ratio (includes off-balance sheet items).
+
+    OBS derivatives (liquid_obs) get weight +½ like liquid liabilities.
+    Guarantees & irrevocable commitments (illiquid_obs) get weight -½.
+    Revocable commitments (semi_liquid_obs) get weight 0.
+    """
     ta = row["total_assets"]
     if not ta or ta == 0:
         return None
     numerator = (
-        0.5 * (row["illiquid_assets"] + row["liquid_liabilities"] + row["illiquid_obs"])
-        + 0.0 * (row["semi_liquid_assets"] + row["semi_liquid_liabilities"] + row["semi_liquid_obs"])
+        0.5 * (row["illiquid_assets"] + row["liquid_liabilities"]
+               + row.get("liquid_obs", 0) + row["illiquid_obs"])
+        + 0.0 * (row["semi_liquid_assets"] + row["semi_liquid_liabilities"]
+                  + row.get("semi_liquid_obs", 0))
         - 0.5 * (row["liquid_assets"] + row["illiquid_liabilities_equity"])
     )
     return round(numerator / ta, 4)
@@ -353,7 +369,7 @@ async def get_liquidity_creation(
     accounting_system: str | None = None,
 ) -> list[dict]:
     """Calculate LC ratio per bank for a given period."""
-    cache_key = f"liq:creation:v9:{year}:{month}:{accounting_system}"
+    cache_key = f"liq:creation:v10:{year}:{month}:{accounting_system}"
     cached = await cache_get(redis, cache_key)
     if cached:
         return cached
@@ -375,7 +391,7 @@ async def get_liquidity_creation(
     columns = [
         "bank_name", "liquid_assets", "semi_liquid_assets", "illiquid_assets",
         "liquid_liabilities", "semi_liquid_liabilities", "illiquid_liabilities_equity",
-        "illiquid_obs", "semi_liquid_obs",
+        "liquid_obs", "illiquid_obs", "semi_liquid_obs",
         "total_assets",
     ]
 
@@ -407,7 +423,7 @@ async def get_liquidity_time_series(
     accounting_system: str | None = None,
 ) -> list[dict]:
     """LC time series — sector weighted average or single bank."""
-    cache_key = f"liq:ts:v9:{bank_name}:{from_year}:{to_year}:{accounting_system}"
+    cache_key = f"liq:ts:v10:{bank_name}:{from_year}:{to_year}:{accounting_system}"
     cached = await cache_get(redis, cache_key)
     if cached:
         return cached
@@ -440,6 +456,7 @@ async def get_liquidity_time_series(
                 {_build_sum_if(_LIQUID_LIABILITIES, _LIABILITY_STMTS)} AS liquid_liabilities,
                 {_build_sum_if(_SEMI_LIQUID_LIABILITIES, _LIABILITY_STMTS)} AS semi_liquid_liabilities,
                 {_build_sum_if(_ILLIQUID_LIABILITIES_EQUITY, _LIABILITY_STMTS)} AS illiquid_liabilities_equity,
+                {_build_sum_if(_LIQUID_OBS, _OBS_STMTS)} AS liquid_obs,
                 {_build_sum_if(_ILLIQUID_OBS, _OBS_STMTS)} AS illiquid_obs,
                 {_build_sum_if(_SEMI_LIQUID_OBS, _OBS_STMTS)} AS semi_liquid_obs,
                 {_total_assets_expr()} AS total_assets
@@ -459,9 +476,10 @@ async def get_liquidity_time_series(
                 "liquid_liabilities": _to_float(r[5]),
                 "semi_liquid_liabilities": _to_float(r[6]),
                 "illiquid_liabilities_equity": _to_float(r[7]),
-                "illiquid_obs": _to_float(r[8]),
-                "semi_liquid_obs": _to_float(r[9]),
-                "total_assets": _to_float(r[10]),
+                "liquid_obs": _to_float(r[8]),
+                "illiquid_obs": _to_float(r[9]),
+                "semi_liquid_obs": _to_float(r[10]),
+                "total_assets": _to_float(r[11]),
             }
             lc_nonfat = _compute_lc_nonfat(vals)
             lc_fat = _compute_lc_fat(vals)
@@ -481,6 +499,7 @@ async def get_liquidity_time_series(
                 sum(ll) AS liquid_liabilities,
                 sum(sll) AS semi_liquid_liabilities,
                 sum(ile) AS illiquid_liabilities_equity,
+                sum(lobs) AS liquid_obs,
                 sum(iobs) AS illiquid_obs,
                 sum(slobs) AS semi_liquid_obs,
                 sum(ta) AS total_assets
@@ -493,6 +512,7 @@ async def get_liquidity_time_series(
                     {_build_sum_if(_LIQUID_LIABILITIES, _LIABILITY_STMTS)} AS ll,
                     {_build_sum_if(_SEMI_LIQUID_LIABILITIES, _LIABILITY_STMTS)} AS sll,
                     {_build_sum_if(_ILLIQUID_LIABILITIES_EQUITY, _LIABILITY_STMTS)} AS ile,
+                    {_build_sum_if(_LIQUID_OBS, _OBS_STMTS)} AS lobs,
                     {_build_sum_if(_ILLIQUID_OBS, _OBS_STMTS)} AS iobs,
                     {_build_sum_if(_SEMI_LIQUID_OBS, _OBS_STMTS)} AS slobs,
                     {_total_assets_expr()} AS ta
@@ -517,9 +537,10 @@ async def get_liquidity_time_series(
                 "liquid_liabilities": _to_float(r[5]),
                 "semi_liquid_liabilities": _to_float(r[6]),
                 "illiquid_liabilities_equity": _to_float(r[7]),
-                "illiquid_obs": _to_float(r[8]),
-                "semi_liquid_obs": _to_float(r[9]),
-                "total_assets": _to_float(r[10]),
+                "liquid_obs": _to_float(r[8]),
+                "illiquid_obs": _to_float(r[9]),
+                "semi_liquid_obs": _to_float(r[10]),
+                "total_assets": _to_float(r[11]),
             }
             lc_nonfat = _compute_lc_nonfat(vals)
             lc_fat = _compute_lc_fat(vals)
@@ -543,7 +564,7 @@ async def get_liquidity_by_group(
     accounting_system: str | None = None,
 ) -> list[dict]:
     """LC weighted average by bank ownership group."""
-    cache_key = f"liq:groups:v11:{year}:{month}:{accounting_system}"
+    cache_key = f"liq:groups:v12:{year}:{month}:{accounting_system}"
     cached = await cache_get(redis, cache_key)
     if cached:
         return cached
@@ -577,7 +598,11 @@ async def get_liquidity_by_group(
             0.5 * (bd["illiquid_assets"] + bd["liquid_liabilities"])
             - 0.5 * (bd["liquid_assets"] + bd["illiquid_liabilities_equity"])
         )
-        fat_num = nonfat_num + 0.5 * bd.get("illiquid_obs", 0)
+        fat_num = (
+            nonfat_num
+            + 0.5 * (bd.get("liquid_obs", 0) + bd.get("illiquid_obs", 0))
+            - 0.5 * 0  # semi_liquid_obs has weight 0
+        )
         g["nonfat_num"] += nonfat_num
         g["fat_num"] += fat_num
         g["total_assets_sum"] += ta
@@ -609,7 +634,7 @@ async def get_liquidity_decomposition(
     accounting_system: str | None = None,
 ) -> dict | None:
     """LC decomposition for a single bank."""
-    cache_key = f"liq:decomp:v9:{bank_name}:{year}:{month}:{accounting_system}"
+    cache_key = f"liq:decomp:v10:{bank_name}:{year}:{month}:{accounting_system}"
     cached = await cache_get(redis, cache_key)
     if cached:
         return cached
@@ -634,7 +659,7 @@ async def get_liquidity_decomposition(
     columns = [
         "bank_name", "liquid_assets", "semi_liquid_assets", "illiquid_assets",
         "liquid_liabilities", "semi_liquid_liabilities", "illiquid_liabilities_equity",
-        "illiquid_obs", "semi_liquid_obs",
+        "liquid_obs", "illiquid_obs", "semi_liquid_obs",
         "total_assets",
     ]
     row = {col: _to_float(v) if i > 0 else v for i, (col, v) in enumerate(zip(columns, r))}
@@ -657,6 +682,7 @@ async def get_liquidity_decomposition(
             "liquid_liabilities": row["liquid_liabilities"],
             "semi_liquid_liabilities": row["semi_liquid_liabilities"],
             "illiquid_liabilities_equity": row["illiquid_liabilities_equity"],
+            "liquid_obs": row["liquid_obs"],
             "illiquid_obs": row["illiquid_obs"],
             "semi_liquid_obs": row["semi_liquid_obs"],
         },
@@ -665,6 +691,7 @@ async def get_liquidity_decomposition(
             "liquid_liabilities_contrib": round(0.5 * row["liquid_liabilities"] / ta, 4),
             "liquid_assets_drag": round(-0.5 * row["liquid_assets"] / ta, 4),
             "illiquid_liab_equity_drag": round(-0.5 * row["illiquid_liabilities_equity"] / ta, 4),
+            "liquid_obs_contrib": round(0.5 * row["liquid_obs"] / ta, 4),
             "illiquid_obs_contrib": round(0.5 * row["illiquid_obs"] / ta, 4),
         },
     }
@@ -695,7 +722,7 @@ async def get_liquidity_group_time_series(
     accounting_system: str | None = None,
 ) -> list[dict]:
     """LC time series by bank ownership group (State Banks / Other Banks)."""
-    cache_key = f"liq:grpts:v14:{accounting_system}"
+    cache_key = f"liq:grpts:v15:{accounting_system}"
     cached = await cache_get(redis, cache_key)
     if cached:
         return cached
