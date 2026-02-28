@@ -86,7 +86,7 @@ export const liquidityApi = {
     apiClient.get('/liquidity/groups', { params }),
   getDecomposition: (params: { bank_name: string; year: number; month: number; accounting_system?: string }) =>
     apiClient.get('/liquidity/decomposition', { params }),
-  getGroupTimeSeries: (params: { accounting_system?: string }) =>
+  getGroupTimeSeries: (params: { accounting_system?: string; col?: string }) =>
     apiClient.get('/liquidity/group-time-series', { params }),
   getGroupTimeSeriesArticle: (params: { accounting_system?: string }) =>
     apiClient.get('/liquidity/group-time-series-article', { params }),

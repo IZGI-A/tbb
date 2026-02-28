@@ -39,6 +39,12 @@ const LiquidityAnalysis: React.FC = () => {
   const { data: groupTsArticle, isLoading: groupTsArticleLoading } = useLiquidityGroupTimeSeriesArticle(
     accountingSystem,
   );
+  const { data: groupTsTc, isLoading: groupTsTcLoading } = useLiquidityGroupTimeSeries(
+    accountingSystem, 'amount_tc',
+  );
+  const { data: groupTsFc, isLoading: groupTsFcLoading } = useLiquidityGroupTimeSeries(
+    accountingSystem, 'amount_fc',
+  );
 
   // Sector average (arithmetic mean)
   const sectorAvg = creation && creation.length > 0
@@ -216,6 +222,80 @@ const LiquidityAnalysis: React.FC = () => {
                 }));
               })()}
               loading={groupTsArticleLoading}
+            />
+          </Card>
+        </Col>
+      </Row>
+
+      {/* TC / FC charts — side by side */}
+      <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
+        <Col xs={24} lg={12}>
+          <Card title="Banka Grubuna Gore Likidite Yaratma Trendi (TL)" style={{ height: '100%' }}>
+            <LineChart
+              title=""
+              xData={(() => {
+                const periods = Array.from(
+                  new Set((groupTsTc ?? []).map((p: LiquidityGroupTimeSeries) =>
+                    `${p.year_id}/${String(p.month_id).padStart(2, '0')}`
+                  ))
+                ).sort();
+                return periods;
+              })()}
+              series={(() => {
+                const groups = Array.from(new Set((groupTsTc ?? []).map((p: LiquidityGroupTimeSeries) => p.group_name))).sort();
+                const periods = Array.from(
+                  new Set((groupTsTc ?? []).map((p: LiquidityGroupTimeSeries) =>
+                    `${p.year_id}/${String(p.month_id).padStart(2, '0')}`
+                  ))
+                ).sort();
+                const lookup = new Map<string, number>();
+                (groupTsTc ?? []).forEach((p: LiquidityGroupTimeSeries) => {
+                  lookup.set(`${p.group_name}|${p.year_id}/${String(p.month_id).padStart(2, '0')}`, p.lc_nonfat);
+                });
+                return groups.map(g => ({
+                  name: g,
+                  data: periods.map(pd => {
+                    const val = lookup.get(`${g}|${pd}`);
+                    return val !== undefined ? Number((val * 100).toFixed(2)) : null;
+                  }),
+                }));
+              })()}
+              loading={groupTsTcLoading}
+            />
+          </Card>
+        </Col>
+        <Col xs={24} lg={12}>
+          <Card title="Banka Grubuna Gore Likidite Yaratma Trendi (YP)" style={{ height: '100%' }}>
+            <LineChart
+              title=""
+              xData={(() => {
+                const periods = Array.from(
+                  new Set((groupTsFc ?? []).map((p: LiquidityGroupTimeSeries) =>
+                    `${p.year_id}/${String(p.month_id).padStart(2, '0')}`
+                  ))
+                ).sort();
+                return periods;
+              })()}
+              series={(() => {
+                const groups = Array.from(new Set((groupTsFc ?? []).map((p: LiquidityGroupTimeSeries) => p.group_name))).sort();
+                const periods = Array.from(
+                  new Set((groupTsFc ?? []).map((p: LiquidityGroupTimeSeries) =>
+                    `${p.year_id}/${String(p.month_id).padStart(2, '0')}`
+                  ))
+                ).sort();
+                const lookup = new Map<string, number>();
+                (groupTsFc ?? []).forEach((p: LiquidityGroupTimeSeries) => {
+                  lookup.set(`${p.group_name}|${p.year_id}/${String(p.month_id).padStart(2, '0')}`, p.lc_nonfat);
+                });
+                return groups.map(g => ({
+                  name: g,
+                  data: periods.map(pd => {
+                    const val = lookup.get(`${g}|${pd}`);
+                    return val !== undefined ? Number((val * 100).toFixed(2)) : null;
+                  }),
+                }));
+              })()}
+              loading={groupTsFcLoading}
             />
           </Card>
         </Col>

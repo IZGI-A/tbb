@@ -720,9 +720,10 @@ async def get_liquidity_group_time_series(
     redis: aioredis.Redis,
     pg: asyncpg.Pool,
     accounting_system: str | None = None,
+    col: str = "amount_total",
 ) -> list[dict]:
     """LC time series by bank ownership group (State Banks / Other Banks)."""
-    cache_key = f"liq:grpts:v15:{accounting_system}"
+    cache_key = f"liq:grpts:v16:{accounting_system}:{col}"
     cached = await cache_get(redis, cache_key)
     if cached:
         return cached
@@ -746,11 +747,11 @@ async def get_liquidity_group_time_series(
     query = f"""
         SELECT
             bank_name, year_id, month_id,
-            {_build_sum_if(_LIQUID_ASSETS, _ASSET_STMTS)} AS la,
-            {_build_sum_if(_ILLIQUID_ASSETS, _ASSET_STMTS)} AS ia,
-            {_build_sum_if(_LIQUID_LIABILITIES, _LIABILITY_STMTS)} AS ll,
-            {_build_sum_if(_ILLIQUID_LIABILITIES_EQUITY, _LIABILITY_STMTS)} AS ile,
-            {_total_assets_expr()} AS ta
+            {_build_sum_if(_LIQUID_ASSETS, _ASSET_STMTS, col)} AS la,
+            {_build_sum_if(_ILLIQUID_ASSETS, _ASSET_STMTS, col)} AS ia,
+            {_build_sum_if(_LIQUID_LIABILITIES, _LIABILITY_STMTS, col)} AS ll,
+            {_build_sum_if(_ILLIQUID_LIABILITIES_EQUITY, _LIABILITY_STMTS, col)} AS ile,
+            {_total_assets_expr(col)} AS ta
         FROM tbb.financial_statements FINAL
         WHERE {where}
         GROUP BY bank_name, year_id, month_id
