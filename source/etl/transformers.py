@@ -12,6 +12,11 @@ logger = logging.getLogger(__name__)
 def _safe_decimal(value: Any) -> Decimal | None:
     if value is None or value == "" or value == "-":
         return None
+    # Handle numeric types directly (e.g. from API responses)
+    if isinstance(value, Decimal):
+        return value
+    if isinstance(value, (int, float)):
+        return Decimal(str(value))
     try:
         # Clean Turkish number format: 1.234.567,89 → 1234567.89
         text = str(value).strip()

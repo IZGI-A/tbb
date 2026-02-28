@@ -37,10 +37,20 @@ export function useLiquidityGroups(year?: number, month?: number, accountingSyst
   });
 }
 
-export function useLiquidityGroupTimeSeries(accountingSystem?: string) {
+export function useLiquidityGroupTimeSeries(accountingSystem?: string, col?: string) {
   return useQuery<LiquidityGroupTimeSeries[]>({
-    queryKey: ['liquidity', 'group-time-series', accountingSystem],
+    queryKey: ['liquidity', 'group-time-series', accountingSystem, col],
     queryFn: () => liquidityApi.getGroupTimeSeries({
+      accounting_system: accountingSystem,
+      col,
+    }).then(r => r.data),
+  });
+}
+
+export function useLiquidityGroupTimeSeriesArticle(accountingSystem?: string) {
+  return useQuery<LiquidityGroupTimeSeries[]>({
+    queryKey: ['liquidity', 'group-time-series-article', accountingSystem],
+    queryFn: () => liquidityApi.getGroupTimeSeriesArticle({
       accounting_system: accountingSystem,
     }).then(r => r.data),
   });

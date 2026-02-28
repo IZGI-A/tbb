@@ -63,6 +63,7 @@ async def liquidity_groups(
 @router.get("/group-time-series")
 async def liquidity_group_time_series(
     accounting_system: str | None = Query(None),
+    col: str = Query("amount_total"),
     redis=Depends(get_redis_client),
     pg=Depends(get_pg),
 ):
@@ -70,6 +71,22 @@ async def liquidity_group_time_series(
     try:
         return await liquidity_service.get_liquidity_group_time_series(
             ch, redis, pg,
+            accounting_system=accounting_system,
+            col=col,
+        )
+    finally:
+        ch.disconnect()
+
+
+@router.get("/group-time-series-article")
+async def liquidity_group_time_series_article(
+    accounting_system: str | None = Query(None),
+    redis=Depends(get_redis_client),
+):
+    ch = get_ch()
+    try:
+        return await liquidity_service.get_liquidity_group_time_series_article(
+            ch, redis,
             accounting_system=accounting_system,
         )
     finally:

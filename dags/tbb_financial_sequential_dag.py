@@ -1,72 +1,98 @@
-"""Orchestrator DAG: runs tbb_financial_solo for each period sequentially.
+"""Orchestrator DAGs: runs financial DAGs for each period sequentially.
 
 Memory-safe: processes one period at a time.
 Full ETL pipeline (scrape -> transform -> load) completes for each period
 before the next one begins.
 
-Period keys are read from dags/config/financial_periods.json.
+Two sequential DAGs:
+  1. tbb_financial_solo_sequential        — TFRS9-SOLO (2018+)
+  2. tbb_financial_solo_legacy_sequential  — SOLO (2002-2017)
 
 Kullanim:
-  1. dags/config/financial_periods.json dosyasina cekilecek donemlerin
-     key'lerini siraya koy (ilk eleman ilk cekilecek donem)
-  2. Bu DAG'i tetikle:
+  1. Config dosyasina cekilecek donemlerin key'lerini siraya koy
+     - TFRS9:  dags/config/financial_periods.json
+     - Legacy: dags/config/financial_periods_legacy.json
+  2. DAG'i tetikle:
      airflow dags trigger tbb_financial_solo_sequential
-
-  Her donem icin tbb_financial_solo DAG'i tetiklenir, tum task'lari
-  (scrape -> transform -> load) tamamlandiktan sonra siradaki doneme gecer.
+     airflow dags trigger tbb_financial_solo_legacy_sequential
 """
 
 import json
 import os
-from datetime import datetime, timedelta
+from datetime import datetime
 
 from airflow import DAG
 from airflow.operators.trigger_dagrun import TriggerDagRunOperator
 
-PERIODS_CONFIG = os.path.join(
-    os.path.dirname(__file__), "config", "financial_periods.json"
-)
+CONFIG_DIR = os.path.join(os.path.dirname(__file__), "config")
 
 
-def _load_period_keys() -> list[int]:
+def _load_period_keys(config_file: str = "financial_periods.json") -> list[int]:
     """Read period_keys from config file."""
     try:
-        with open(PERIODS_CONFIG, encoding="utf-8") as f:
+        with open(os.path.join(CONFIG_DIR, config_file), encoding="utf-8") as f:
             data = json.load(f)
         return data.get("period_keys", [])
     except (FileNotFoundError, json.JSONDecodeError):
         return []
 
 
-default_args = {
-    "owner": "tbb",
-    "retries": 0,
-}
+def _build_sequential_dag(
+    dag_id: str,
+    trigger_dag_id: str,
+    config_file: str,
+    description: str,
+    tags: list[str],
+):
+    """Create a sequential DAG that triggers another DAG per period."""
+    default_args = {
+        "owner": "tbb",
+        "retries": 0,
+    }
 
-with DAG(
+    with DAG(
+        dag_id=dag_id,
+        default_args=default_args,
+        description=description,
+        schedule_interval=None,
+        start_date=datetime(2024, 1, 1),
+        catchup=False,
+        tags=tags,
+    ) as dag:
+        period_keys = _load_period_keys(config_file)
+
+        prev_task = None
+        for idx, key in enumerate(period_keys):
+            trigger = TriggerDagRunOperator(
+                task_id=f"period_{idx}",
+                trigger_dag_id=trigger_dag_id,
+                conf={"period_keys": [key]},
+                wait_for_completion=True,
+                poke_interval=60,
+                allowed_states=["success"],
+                failed_states=["failed"],
+            )
+            if prev_task:
+                prev_task >> trigger
+            prev_task = trigger
+
+    return dag
+
+
+# ── Sequential DAG 1: TFRS9-SOLO (2018+) ──────────────────────
+dag_solo_seq = _build_sequential_dag(
     dag_id="tbb_financial_solo_sequential",
-    default_args=default_args,
-    description=(
-        "Her donemi tek tek ceker: tbb_financial_solo'yu sirayla tetikler"
-    ),
-    schedule_interval=None,  # sadece manuel tetikleme
-    start_date=datetime(2024, 1, 1),
-    catchup=False,
+    trigger_dag_id="tbb_financial_solo",
+    config_file="financial_periods.json",
+    description="Her donemi tek tek ceker: tbb_financial_solo'yu sirayla tetikler",
     tags=["tbb", "financial", "solo", "sequential"],
-) as dag:
-    period_keys = _load_period_keys()
+)
 
-    prev_task = None
-    for idx, key in enumerate(period_keys):
-        trigger = TriggerDagRunOperator(
-            task_id=f"period_{idx}",
-            trigger_dag_id="tbb_financial_solo",
-            conf={"period_keys": [key]},
-            wait_for_completion=True,
-            poke_interval=60,  # her 60 saniyede tamamlandi mi kontrol et
-            allowed_states=["success"],
-            failed_states=["failed"],
-        )
-        if prev_task:
-            prev_task >> trigger
-        prev_task = trigger
+# ── Sequential DAG 2: SOLO Legacy (2002-2017) ─────────────────
+dag_legacy_seq = _build_sequential_dag(
+    dag_id="tbb_financial_solo_legacy_sequential",
+    trigger_dag_id="tbb_financial_solo_legacy",
+    config_file="financial_periods_legacy.json",
+    description="Her donemi tek tek ceker: tbb_financial_solo_legacy'yi sirayla tetikler",
+    tags=["tbb", "financial", "solo", "legacy", "sequential"],
+)
